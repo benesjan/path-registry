@@ -8,6 +8,6 @@ interface ICachedRouter {
     function swap(
         address tokenIn,
         address tokenOut,
-        uint256 amount
+        uint256 amountIn
     ) external payable returns (uint256 amountOut);
 }

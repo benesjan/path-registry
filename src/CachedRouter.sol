@@ -17,6 +17,9 @@ contract CachedRouter is ICachedRouter {
     function swap(
         address tokenIn,
         address tokenOut,
-        uint256 amount
-    ) external payable override returns (uint256 amountOut) {}
+        uint256 amountIn
+    ) external payable override returns (uint256 amountOut) {
+//        bytes memory path = bytes(""); // TODO: fetch path
+//        amountOut = ROUTER.exactInput(ISwapRouter02.ExactInputParams(path, msg.sender, block.timestamp, amountIn, 0));
+    }
 }

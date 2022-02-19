@@ -3,11 +3,17 @@
 pragma solidity ^0.8.0;
 
 import "ds-test/test.sol";
+import "../interfaces/ICachedRouter.sol";
+import "../CachedRouter.sol";
 
 contract CachedRouterTest is DSTest {
-    function setUp() public {}
+    ICachedRouter cachedRouter;
 
-    function testExample() public {
+    function setUp() public {
+        cachedRouter = new CachedRouter();
+    }
+
+    function testRegisterPath() public {
         assertTrue(true);
     }
 }

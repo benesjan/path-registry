@@ -1,24 +1,57 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright 2020 Spilsbury Holdings Ltd
 pragma solidity >=0.7.5;
+pragma abicoder v2;
 
 import "uni-interfaces/IQuoter.sol";
 import "uni-interfaces/ISwapRouter02.sol";
-import "./interfaces/ICachedRouter.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol";
 
-contract CachedRouter is ICachedRouter {
+contract CachedRouter {
     IQuoter public constant QUOTER = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
+    IUniswapV2Router01 public constant ROUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+
     ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
 
-    function registerPath(bytes calldata path, uint256 amountIn) external override {
-        uint256 amountOut = QUOTER.quoteExactInput(path, amountIn);
+    struct SubPathV2 {
+        uint8 percent;
+        address[] path;
+    }
+
+    struct SubPathV3 {
+        uint8 percent;
+        bytes path;
+    }
+
+    function registerPath(
+        SubPathV2[] calldata subPathsV2,
+        SubPathV3[] calldata subPathsV3,
+        uint256 amountIn
+    ) external {
+        uint256 amountOut = 0;
+        uint256 percentSum = uint8(0);
+        uint256 subAmountIn;
+
+        for (uint256 i = 0; i < subPathsV2.length; i++) {
+            subAmountIn = (amountIn * subPathsV2[i].percent) / 100;
+            amountOut += ROUTER_V2.getAmountsOut(subAmountIn, subPathsV2[i].path)[subPathsV2[i].path.length - 1];
+            percentSum += subPathsV2[i].percent;
+        }
+
+        for (uint256 i = 0; i < subPathsV3.length; i++) {
+            subAmountIn = (amountIn * subPathsV3[i].percent) / 100;
+            amountOut += QUOTER.quoteExactInput(subPathsV3[i].path, subAmountIn);
+            percentSum += subPathsV3[i].percent;
+        }
+
+        require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
     }
 
     function swap(
         address tokenIn,
         address tokenOut,
         uint256 amountIn
-    ) external payable override returns (uint256 amountOut) {
+    ) external payable returns (uint256 amountOut) {
 //        bytes memory path = bytes(""); // TODO: fetch path
 //        amountOut = ROUTER.exactInput(ISwapRouter02.ExactInputParams(path, msg.sender, block.timestamp, amountIn, 0));
     }

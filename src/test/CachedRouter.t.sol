@@ -21,30 +21,32 @@ contract CachedRouterTest is DSTest {
     function testRegisterPath() public {
         uint256 ethAmountIn = 1e22;
 
-        CachedRouter.SubPathV2[] memory subPathsV2 = new CachedRouter.SubPathV2[](1);
-        CachedRouter.SubPathV3[] memory subPathsV3 = new CachedRouter.SubPathV3[](3);
+        CachedRouter.Path memory path;
+
+        path.subPathsV2 = new CachedRouter.SubPathV2[](1);
+        path.subPathsV3 = new CachedRouter.SubPathV3[](3);
 
         // 1.
         address[] memory subPath1Addresses = new address[](2);
         subPath1Addresses[0] = WETH;
         subPath1Addresses[1] = LUSD;
-        subPathsV2[0] = CachedRouter.SubPathV2({percent: 45, path: subPath1Addresses});
+        path.subPathsV2[0] = CachedRouter.SubPathV2({percent: 45, path: subPath1Addresses});
 
         // 2.
-        subPathsV3[0] = CachedRouter.SubPathV3({percent: 45, path: abi.encodePacked(WETH, uint24(3000), LUSD)});
+        path.subPathsV3[0] = CachedRouter.SubPathV3({percent: 45, path: abi.encodePacked(WETH, uint24(3000), LUSD)});
 
         // 3.
-        subPathsV3[1] = CachedRouter.SubPathV3({
+        path.subPathsV3[1] = CachedRouter.SubPathV3({
             percent: 5,
             path: abi.encodePacked(WETH, uint24(3000), DAI, uint24(3000), LUSD)
         });
 
         // 4.
-        subPathsV3[2] = CachedRouter.SubPathV3({
+        path.subPathsV3[2] = CachedRouter.SubPathV3({
             percent: 5,
             path: abi.encodePacked(WETH, uint24(10000), DAI, uint24(100), USDC, uint24(500), LUSD)
         });
 
-        cachedRouter.registerPath(subPathsV2, subPathsV3, ethAmountIn);
+        cachedRouter.registerPath(path, ethAmountIn);
     }
 }

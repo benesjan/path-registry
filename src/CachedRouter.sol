@@ -23,25 +23,28 @@ contract CachedRouter {
         bytes path;
     }
 
-    function registerPath(
-        SubPathV2[] calldata subPathsV2,
-        SubPathV3[] calldata subPathsV3,
-        uint256 amountIn
-    ) external {
-        uint256 amountOut = 0;
-        uint256 percentSum = uint8(0);
-        uint256 subAmountIn;
+    struct Path {
+        SubPathV2[] subPathsV2;
+        SubPathV3[] subPathsV3;
+    }
 
-        for (uint256 i = 0; i < subPathsV2.length; i++) {
-            subAmountIn = (amountIn * subPathsV2[i].percent) / 100;
-            amountOut += ROUTER_V2.getAmountsOut(subAmountIn, subPathsV2[i].path)[subPathsV2[i].path.length - 1];
-            percentSum += subPathsV2[i].percent;
+    function registerPath(Path calldata path, uint256 amountIn) external {
+        uint256 amountOut;
+        uint256 subAmountIn;
+        uint8 percentSum;
+
+        for (uint256 i; i < path.subPathsV2.length; i++) {
+            SubPathV2 memory subPath = path.subPathsV2[i];
+            subAmountIn = (amountIn * subPath.percent) / 100;
+            amountOut += ROUTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
+            percentSum += subPath.percent;
         }
 
-        for (uint256 i = 0; i < subPathsV3.length; i++) {
-            subAmountIn = (amountIn * subPathsV3[i].percent) / 100;
-            amountOut += QUOTER.quoteExactInput(subPathsV3[i].path, subAmountIn);
-            percentSum += subPathsV3[i].percent;
+        for (uint256 i; i < path.subPathsV3.length; i++) {
+            SubPathV3 memory subPath = path.subPathsV3[i];
+            subAmountIn = (amountIn * subPath.percent) / 100;
+            amountOut += QUOTER.quoteExactInput(subPath.path, subAmountIn);
+            percentSum += subPath.percent;
         }
 
         require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");

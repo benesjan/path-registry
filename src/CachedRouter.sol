@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright 2020 Spilsbury Holdings Ltd
-pragma solidity >=0.7.5;
-pragma abicoder v2;
+pragma solidity ^0.8.0;
 
-import "uni-interfaces/IQuoter.sol";
-import "uni-interfaces/ISwapRouter02.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol";
+import "./interfaces/IQuoter.sol";
+import "./interfaces/IUniswapV2Router01.sol";
 
 contract CachedRouter {
     IQuoter public constant QUOTER = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
     IUniswapV2Router01 public constant ROUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
 
-    ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
+    //    ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
 
     struct SubPathV2 {
         uint8 percent;

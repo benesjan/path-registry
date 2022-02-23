@@ -2,10 +2,6 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-remappings = [
-    'ds-test/=lib/ds-test/src/',
-    '@uniswap/=node_modules/@uniswap/',
-    'uni-interfaces/=node_modules/@uniswap/swap-router-contracts/contracts/interfaces'
-]
+remappings = ['ds-test/=lib/ds-test/src/']
 
 # See more config options https://github.com/gakonst/foundry/tree/master/config

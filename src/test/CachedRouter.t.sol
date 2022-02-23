@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright 2020 Spilsbury Holdings Ltd
-pragma solidity >=0.7.5;
-pragma abicoder v2;
+pragma solidity >=0.8.0;
 
 import "ds-test/test.sol";
 import "../CachedRouter.sol";

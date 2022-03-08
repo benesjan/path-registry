@@ -17,11 +17,21 @@ contract CachedRouterTest is DSTest {
         cachedRouter = new CachedRouter();
     }
 
+    function testRegisterPathNon0First() public {
+        CachedRouter.Path memory path = getTestPath();
+        path.amount = 5;
+        try cachedRouter.registerPath(path) {
+            assertTrue(false, "registerPath(..) has to revert when initializing path with non-zero amount.");
+        } catch Error(string memory reason) {
+            assertEq(reason, "CachedRouter: NON_ZERO_AMOUNT");
+        }
+    }
+
     function testRegisterPath() public {
-        uint256 ethAmountIn = 1e22;
+        cachedRouter.registerPath(getTestPath());
+    }
 
-        CachedRouter.Path memory path;
-
+    function getTestPath() private returns (CachedRouter.Path memory path) {
         path.subPathsV2 = new CachedRouter.SubPathV2[](1);
         path.subPathsV3 = new CachedRouter.SubPathV3[](3);
 
@@ -45,7 +55,5 @@ contract CachedRouterTest is DSTest {
             percent: 5,
             path: abi.encodePacked(WETH, uint24(10000), DAI, uint24(100), USDC, uint24(500), LUSD)
         });
-
-        cachedRouter.registerPath(path, ethAmountIn);
     }
 }

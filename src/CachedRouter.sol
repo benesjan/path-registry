@@ -40,48 +40,78 @@ contract CachedRouter {
         allPaths.push();
     }
 
-    function registerPath(Path calldata path) external {
+    function registerPath(Path calldata newPath) external {
         // First check whether path has been initialized
         address input;
         address output;
-        if (path.subPathsV2.length != 0) {
-            input = path.subPathsV2[0].path[0];
-            output = path.subPathsV2[path.subPathsV2.length - 1].path[1];
-        } else if (path.subPathsV3.length != 0) {
-            bytes calldata v3Path = path.subPathsV3[0].path;
+        if (newPath.subPathsV2.length != 0) {
+            input = newPath.subPathsV2[0].path[0];
+            output = newPath.subPathsV2[newPath.subPathsV2.length - 1].path[1];
+        } else if (newPath.subPathsV3.length != 0) {
+            bytes calldata v3Path = newPath.subPathsV3[0].path;
             input = v3Path.toAddress(0);
             output = v3Path.toAddress(v3Path.length - 20);
         } else {
             require(false, "CachedRouter: EMPTY_PATH");
         }
 
-        uint256 pathBeginning = pathBeginnings[input][output];
-        if (pathBeginning == 0) {
-            require(path.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
-            allPaths.push(path);
+        uint256 curPathIndex = pathBeginnings[input][output];
+        if (curPathIndex == 0) {
+            require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
+            allPaths.push(newPath);
             pathBeginnings[input][output] = allPaths.length - 1;
+        } else {
+            require(newPath.amount != 0, "CachedRouter: ZERO_AMOUNT");
+            // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
+            // because later on I need to pass a storage struct (curPath) and it's impossible to copy from storage
+            // to calldata.
+            uint256 pathQuote = quotePath(newPath, newPath.amount);
+
+            while (true) {
+                Path memory curPath = allPaths[curPathIndex];
+                Path memory nextPath = allPaths[curPath.next];
+                if (curPath.next == 0 || newPath.amount < nextPath.amount) {
+                    uint256 curPathQuote = quotePath(curPath, newPath.amount);
+                    require(curPathQuote < pathQuote, "CachedRouter: QUOTE_NOT_BETTER");
+                    insertPath(newPath, curPathIndex, curPath.next);
+                    break;
+                }
+                curPathIndex = curPath.next;
+            }
         }
     }
 
-    function quotePath(Path calldata path) internal returns (uint256 amountOut) {
+    // TODO: memory or calldata here
+    function quotePath(Path memory path, uint256 amountIn) private returns (uint256 amountOut) {
         uint256 subAmountIn;
         uint256 percentSum;
 
         for (uint256 i; i < path.subPathsV2.length; i++) {
             SubPathV2 memory subPath = path.subPathsV2[i];
-            subAmountIn = (path.amount * subPath.percent) / 100;
+            subAmountIn = (amountIn * subPath.percent) / 100;
             amountOut += ROUTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
             percentSum += subPath.percent;
         }
 
         for (uint256 i; i < path.subPathsV3.length; i++) {
             SubPathV3 memory subPath = path.subPathsV3[i];
-            subAmountIn = (path.amount * subPath.percent) / 100;
+            subAmountIn = (amountIn * subPath.percent) / 100;
             amountOut += QUOTER.quoteExactInput(subPath.path, subAmountIn);
             percentSum += subPath.percent;
         }
 
         require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
+    }
+
+    function insertPath(
+        Path calldata newPath,
+        uint256 curPathIndex,
+        uint256 nextPathIndex
+    ) private {
+        allPaths.push(newPath);
+        uint256 newPathIndex = allPaths.length - 1;
+        allPaths[curPathIndex].next = newPathIndex;
+        allPaths[newPathIndex].next = nextPathIndex;
     }
 
     function swap(

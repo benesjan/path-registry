@@ -11,7 +11,7 @@ contract CachedRouterTest is DSTest {
     address private constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address private constant LUSD = 0x5f98805A4E8be255a32880FDeC7F6728C6568bA0;
 
-    CachedRouter cachedRouter;
+    CachedRouter private cachedRouter;
 
     function setUp() public {
         cachedRouter = new CachedRouter();
@@ -29,9 +29,10 @@ contract CachedRouterTest is DSTest {
 
     function testRegisterPath() public {
         cachedRouter.registerPath(getTestPath());
+        // TODO
     }
 
-    function getTestPath() private returns (CachedRouter.Path memory path) {
+    function getTestPath() private pure returns (CachedRouter.Path memory path) {
         path.subPathsV2 = new CachedRouter.SubPathV2[](1);
         path.subPathsV3 = new CachedRouter.SubPathV3[](3);
 

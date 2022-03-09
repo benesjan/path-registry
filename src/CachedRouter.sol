@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Copyright 2020 Spilsbury Holdings Ltd
+// Copyright 2022 Spilsbury Holdings Ltd
 pragma solidity ^0.8.0;
 
 import "./libs/BytesLib.sol";
@@ -65,19 +65,21 @@ contract CachedRouter {
             // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
             // because later on I need to pass a storage struct (curPath) and it's impossible to copy from storage
             // to calldata.
-            uint256 pathQuote = quotePath(newPath, newPath.amount);
+            uint256 newPathQuote = quotePath(newPath, newPath.amount);
 
-            while (true) {
+            bool notInserted = true;
+            while (notInserted) {
                 Path memory curPath = allPaths[curPathIndex];
                 Path memory nextPath = allPaths[curPath.next];
                 if (curPath.next == 0 || newPath.amount < nextPath.amount) {
                     uint256 curPathQuote = quotePath(curPath, newPath.amount);
-                    require(curPathQuote < pathQuote, "CachedRouter: QUOTE_NOT_BETTER");
+                    require(curPathQuote < newPathQuote, "CachedRouter: QUOTE_NOT_BETTER");
                     insertPath(newPath, curPathIndex, curPath.next);
-                    break;
+                    notInserted = false;
                 }
                 curPathIndex = curPath.next;
             }
+            require(!notInserted, "CachedRouter: PATH_NOT_INSERTED");
         }
     }
 

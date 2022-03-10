@@ -3,9 +3,11 @@
 pragma solidity ^0.8.0;
 
 import "./libs/BytesLib.sol";
+import "./interfaces/IWETH.sol";
+import "./interfaces/IERC20.sol";
 import "./interfaces/IQuoter.sol";
-import "./interfaces/IUniswapV2Router01.sol";
 import "./interfaces/ISwapRouter02.sol";
+import "./interfaces/IUniswapV2Router01.sol";
 
 contract CachedRouter {
     using BytesLib for bytes;
@@ -13,6 +15,8 @@ contract CachedRouter {
     IUniswapV2Router01 public constant QOUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
     IQuoter public constant QUOTER_V3 = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
     ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
+
+    address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     mapping(address => mapping(address => uint256)) public pathBeginnings;
 
@@ -62,6 +66,8 @@ contract CachedRouter {
             // TODO: check percent sum == 0
             allPaths.push(newPath);
             pathBeginnings[tokenIn][tokenOut] = allPaths.length - 1;
+
+            require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
         } else {
             require(newPath.amount != 0, "CachedRouter: ZERO_AMOUNT");
             // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
@@ -126,6 +132,15 @@ contract CachedRouter {
     ) external payable returns (uint256 amountOut) {
         uint256 curPathIndex = pathBeginnings[tokenIn][tokenOut];
         require(curPathIndex != 0, "CachedRouter: PATH_NOT_INITIALIZED");
+
+        if (msg.value > 0) {
+            require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
+            require(msg.value == amountIn, "CachedRouter: INCORRECT_AMOUNT_IN");
+            IWETH(WETH).deposit{value: msg.value}();
+        } else {
+            require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
+        }
+
         while (true) {
             Path memory curPath = allPaths[curPathIndex];
             Path memory nextPath = allPaths[curPath.next];

@@ -5,16 +5,16 @@ pragma solidity ^0.8.0;
 import "./libs/BytesLib.sol";
 import "./interfaces/IQuoter.sol";
 import "./interfaces/IUniswapV2Router01.sol";
+import "./interfaces/ISwapRouter02.sol";
 
 contract CachedRouter {
     using BytesLib for bytes;
 
-    IQuoter public constant QUOTER = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
-    IUniswapV2Router01 public constant ROUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    IUniswapV2Router01 public constant QOUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    IQuoter public constant QUOTER_V3 = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
+    ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
 
     mapping(address => mapping(address => uint256)) public pathBeginnings;
-
-    //    ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
 
     struct SubPathV2 {
         uint256 percent; // No packing here so I am using uint256 to avoid runtime conversion from uint8 to uint256
@@ -41,25 +41,27 @@ contract CachedRouter {
     }
 
     function registerPath(Path calldata newPath) external {
+        // TODO: handle path deletion and implement path amount limit
         // First check whether path has been initialized
-        address input;
-        address output;
+        address tokenIn;
+        address tokenOut;
         if (newPath.subPathsV2.length != 0) {
-            input = newPath.subPathsV2[0].path[0];
-            output = newPath.subPathsV2[newPath.subPathsV2.length - 1].path[1];
+            tokenIn = newPath.subPathsV2[0].path[0];
+            tokenOut = newPath.subPathsV2[newPath.subPathsV2.length - 1].path[1];
         } else if (newPath.subPathsV3.length != 0) {
             bytes calldata v3Path = newPath.subPathsV3[0].path;
-            input = v3Path.toAddress(0);
-            output = v3Path.toAddress(v3Path.length - 20);
+            tokenIn = v3Path.toAddress(0);
+            tokenOut = v3Path.toAddress(v3Path.length - 20);
         } else {
             require(false, "CachedRouter: EMPTY_PATH");
         }
 
-        uint256 curPathIndex = pathBeginnings[input][output];
+        uint256 curPathIndex = pathBeginnings[tokenIn][tokenOut];
         if (curPathIndex == 0) {
             require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
+            // TODO: check percent sum == 0
             allPaths.push(newPath);
-            pathBeginnings[input][output] = allPaths.length - 1;
+            pathBeginnings[tokenIn][tokenOut] = allPaths.length - 1;
         } else {
             require(newPath.amount != 0, "CachedRouter: ZERO_AMOUNT");
             // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
@@ -91,14 +93,14 @@ contract CachedRouter {
         for (uint256 i; i < path.subPathsV2.length; i++) {
             SubPathV2 memory subPath = path.subPathsV2[i];
             subAmountIn = (amountIn * subPath.percent) / 100;
-            amountOut += ROUTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
+            amountOut += QOUTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
             percentSum += subPath.percent;
         }
 
         for (uint256 i; i < path.subPathsV3.length; i++) {
             SubPathV3 memory subPath = path.subPathsV3[i];
             subAmountIn = (amountIn * subPath.percent) / 100;
-            amountOut += QUOTER.quoteExactInput(subPath.path, subAmountIn);
+            amountOut += QUOTER_V3.quoteExactInput(subPath.path, subAmountIn);
             percentSum += subPath.percent;
         }
 
@@ -119,9 +121,33 @@ contract CachedRouter {
     function swap(
         address tokenIn,
         address tokenOut,
-        uint256 amountIn
+        uint256 amountIn,
+        uint256 amountOutMin
     ) external payable returns (uint256 amountOut) {
-        //        bytes memory path = bytes(""); // TODO: fetch path
-        //        amountOut = ROUTER.exactInput(ISwapRouter02.ExactInputParams(path, msg.sender, block.timestamp, amountIn, 0));
+        uint256 curPathIndex = pathBeginnings[tokenIn][tokenOut];
+        require(curPathIndex != 0, "CachedRouter: PATH_NOT_INITIALIZED");
+        while (true) {
+            Path memory curPath = allPaths[curPathIndex];
+            Path memory nextPath = allPaths[curPath.next];
+            if (curPath.next == 0 || amountIn < nextPath.amount) {
+                uint256 subAmountIn;
+                for (uint256 i; i < curPath.subPathsV2.length; i++) {
+                    SubPathV2 memory subPath = curPath.subPathsV2[i];
+                    subAmountIn = (amountIn * subPath.percent) / 100;
+                    amountOut += ROUTER.swapExactTokensForTokens(subAmountIn, 0, subPath.path, msg.sender);
+                }
+
+                for (uint256 i; i < curPath.subPathsV3.length; i++) {
+                    SubPathV3 memory subPath = curPath.subPathsV3[i];
+                    subAmountIn = (amountIn * subPath.percent) / 100;
+                    amountOut += ROUTER.exactInput(
+                        ISwapRouter02.ExactInputParams(subPath.path, msg.sender, subAmountIn, 0)
+                    );
+                }
+                break;
+            }
+            curPathIndex = curPath.next;
+        }
+        require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
     }
 }

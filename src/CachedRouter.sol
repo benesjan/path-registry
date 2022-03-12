@@ -96,18 +96,26 @@ contract CachedRouter {
         uint256 subAmountIn;
         uint256 percentSum;
 
-        for (uint256 i; i < path.subPathsV2.length; i++) {
+        uint256 arrayLength = path.subPathsV2.length;
+        for (uint256 i; i < arrayLength; ) {
             SubPathV2 memory subPath = path.subPathsV2[i];
             subAmountIn = (amountIn * subPath.percent) / 100;
             amountOut += QOUTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
             percentSum += subPath.percent;
+            unchecked {
+                ++i;
+            }
         }
 
-        for (uint256 i; i < path.subPathsV3.length; i++) {
+        arrayLength = path.subPathsV3.length;
+        for (uint256 i; i < arrayLength; ) {
             SubPathV3 memory subPath = path.subPathsV3[i];
             subAmountIn = (amountIn * subPath.percent) / 100;
             amountOut += QUOTER_V3.quoteExactInput(subPath.path, subAmountIn);
             percentSum += subPath.percent;
+            unchecked {
+                ++i;
+            }
         }
 
         require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
@@ -146,18 +154,26 @@ contract CachedRouter {
             Path memory nextPath = allPaths[curPath.next];
             if (curPath.next == 0 || amountIn < nextPath.amount) {
                 uint256 subAmountIn;
-                for (uint256 i; i < curPath.subPathsV2.length; i++) {
+                uint256 arrayLength = curPath.subPathsV2.length;
+                for (uint256 i; i < arrayLength; ) {
                     SubPathV2 memory subPath = curPath.subPathsV2[i];
                     subAmountIn = (amountIn * subPath.percent) / 100;
                     amountOut += ROUTER.swapExactTokensForTokens(subAmountIn, 0, subPath.path, msg.sender);
+                    unchecked {
+                        ++i;
+                    }
                 }
 
-                for (uint256 i; i < curPath.subPathsV3.length; i++) {
+                arrayLength = curPath.subPathsV3.length;
+                for (uint256 i; i < arrayLength; ) {
                     SubPathV3 memory subPath = curPath.subPathsV3[i];
                     subAmountIn = (amountIn * subPath.percent) / 100;
                     amountOut += ROUTER.exactInput(
                         ISwapRouter02.ExactInputParams(subPath.path, msg.sender, subAmountIn, 0)
                     );
+                    unchecked {
+                        ++i;
+                    }
                 }
                 break;
             }

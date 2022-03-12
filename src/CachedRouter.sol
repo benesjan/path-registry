@@ -3,6 +3,8 @@
 pragma solidity ^0.8.0;
 
 import "./libs/BytesLib.sol";
+import "./libs/OracleLibrary.sol";
+
 import "./interfaces/IWETH.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IQuoter.sol";
@@ -64,6 +66,8 @@ contract CachedRouter {
         if (curPathIndex == 0) {
             require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
             // TODO: check percent sum == 0
+            // An unviable path might be provided since I am not quoting during first registration - make sure quotePath
+            // returns 0 when the swap fails
             allPaths.push(newPath);
             pathBeginnings[tokenIn][tokenOut] = allPaths.length - 1;
 
@@ -73,14 +77,14 @@ contract CachedRouter {
             // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
             // because later on I need to pass a storage struct (curPath) and it's impossible to copy from storage
             // to calldata.
-            uint256 newPathQuote = quotePath(newPath, newPath.amount);
+            uint256 newPathQuote = quotePath(newPath, newPath.amount, tokenOut);
 
             bool notInserted = true;
             while (notInserted) {
                 Path memory curPath = allPaths[curPathIndex];
                 Path memory nextPath = allPaths[curPath.next];
                 if (curPath.next == 0 || newPath.amount < nextPath.amount) {
-                    uint256 curPathQuote = quotePath(curPath, newPath.amount);
+                    uint256 curPathQuote = quotePath(curPath, newPath.amount, tokenOut);
                     require(curPathQuote < newPathQuote, "CachedRouter: QUOTE_NOT_BETTER");
                     insertPath(newPath, curPathIndex, curPath.next);
                     notInserted = false;
@@ -92,10 +96,19 @@ contract CachedRouter {
     }
 
     // TODO: memory or calldata here
-    function quotePath(Path memory path, uint256 amountIn) private returns (uint256 amountOut) {
+    // Note: Gas consumption might be reduced by quoting Uni V3 price using OracleLibrary:
+    // https://github.com/Uniswap/v3-periphery/blob/51f8871aaef2263c8e8bbf4f3410880b6162cdea/contracts/libraries/OracleLibrary.sol#L49
+    // - less gas would be consumed but it would be less precised as it assumes no ticks will be crossed
+    // - it would also make estimation of swap gas cost more difficult
+    function quotePath(
+        Path memory path,
+        uint256 amountIn,
+        address tokenOut
+    ) private returns (uint256 amountOut) {
         uint256 subAmountIn;
         uint256 percentSum;
 
+        uint256 gasLeftBefore = gasleft();
         uint256 arrayLength = path.subPathsV2.length;
         for (uint256 i; i < arrayLength; ) {
             SubPathV2 memory subPath = path.subPathsV2[i];
@@ -117,6 +130,11 @@ contract CachedRouter {
                 ++i;
             }
         }
+        // Note: this value does not precisely represent gas consumed during swaps since swaps are not exactly equal
+        // to quoting. However it should be a good enough approximation.
+        uint256 weiConsumed = (gasLeftBefore - gasleft()) * block.basefee;
+        uint256 tokenConsumed = OracleLibrary.getQuoteAtCurrentTick(weiConsumed, tokenOut);
+        amountOut -= tokenConsumed;
 
         require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
     }

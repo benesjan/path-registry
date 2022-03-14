@@ -25,6 +25,16 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
         }
     }
 
+    function testPathLimitReached() public {
+        CachedRouter _cachedRouter = new CachedRouter(1);
+        _cachedRouter.registerPath(getPath1(0));
+        try _cachedRouter.registerPath(getPath2(5)) {
+            assertTrue(false, "registerPath(..) has to revert when path limit is reached.");
+        } catch Error(string memory reason) {
+            assertEq(reason, "CachedRouter: PATH_LIMIT_REACHED");
+        }
+    }
+
     function testRegisterPath() public {
         cachedRouter.registerPath(getPath1(0));
         cachedRouter.registerPath(getPath2(1e22)); // 10000 ETH

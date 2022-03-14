@@ -46,29 +46,17 @@ contract CachedRouter {
 
     Path[] public allPaths;
 
-    uint8 public immutable maxPathAmount;
+    uint8 public immutable numPathsRegisteredLimit;
 
-    constructor(uint8 _maxPathAmount) {
-        maxPathAmount = _maxPathAmount;
+    constructor(uint8 _numPathsRegisteredLimit) {
+        numPathsRegisteredLimit = _numPathsRegisteredLimit;
     }
 
     function registerPath(Path calldata newPath) external {
         // TODO: handle path deletion and implement path amount limit
-        // First check whether path has been initialized
-        address tokenIn;
-        address tokenOut;
-        if (newPath.subPathsV2.length != 0) {
-            tokenIn = newPath.subPathsV2[0].path[0];
-            tokenOut = newPath.subPathsV2[newPath.subPathsV2.length - 1].path[1];
-        } else if (newPath.subPathsV3.length != 0) {
-            bytes calldata v3Path = newPath.subPathsV3[0].path;
-            tokenIn = v3Path.toAddress(0);
-            tokenOut = v3Path.toAddress(v3Path.length - 20);
-        } else {
-            require(false, "CachedRouter: EMPTY_PATH");
-        }
-
+        (address tokenIn, address tokenOut) = getTokenInOut(newPath);
         PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
+
         if (pathInfo.numPathsRegistered == 0) {
             require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
             // TODO: check percent sum == 0
@@ -83,6 +71,8 @@ contract CachedRouter {
             require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
         } else {
             require(newPath.amount != 0, "CachedRouter: ZERO_AMOUNT");
+            // When path limit is reached call replacePath(...) instead
+            require(pathInfo.numPathsRegistered < numPathsRegisteredLimit, "CachedRouter: PATH_LIMIT_REACHED");
             // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
             // because later on I need to pass a storage struct (curPath) and it's impossible to copy from storage
             // to calldata.
@@ -213,5 +203,18 @@ contract CachedRouter {
             curPathIndex = curPath.next;
         }
         require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
+    }
+
+    function getTokenInOut(Path calldata path) private pure returns (address tokenIn, address tokenOut) {
+        if (path.subPathsV2.length != 0) {
+            tokenIn = path.subPathsV2[0].path[0];
+            tokenOut = path.subPathsV2[path.subPathsV2.length - 1].path[1];
+        } else if (path.subPathsV3.length != 0) {
+            bytes calldata v3Path = path.subPathsV3[0].path;
+            tokenIn = v3Path.toAddress(0);
+            tokenOut = v3Path.toAddress(v3Path.length - 20);
+        } else {
+            require(false, "CachedRouter: EMPTY_PATH");
+        }
     }
 }

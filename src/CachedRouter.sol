@@ -98,7 +98,7 @@ contract CachedRouter {
     // TODO: memory or calldata here
     // Note: Gas consumption might be reduced by quoting Uni V3 price using OracleLibrary:
     // https://github.com/Uniswap/v3-periphery/blob/51f8871aaef2263c8e8bbf4f3410880b6162cdea/contracts/libraries/OracleLibrary.sol#L49
-    // - less gas would be consumed but it would be less precised as it assumes no ticks will be crossed
+    // - less gas would be consumed but it would be less precise as it assumes no ticks will be crossed
     // - it would also make estimation of swap gas cost more difficult
     function quotePath(
         Path memory path,
@@ -132,9 +132,9 @@ contract CachedRouter {
         }
         // Note: this value does not precisely represent gas consumed during swaps since swaps are not exactly equal
         // to quoting. However it should be a good enough approximation.
-        uint256 weiConsumed = (gasLeftBefore - gasleft()) * block.basefee;
+        uint256 weiConsumed = (gasLeftBefore - gasleft()) * tx.gasprice;
         uint256 tokenConsumed = OracleLibrary.getQuoteAtCurrentTick(weiConsumed, tokenOut);
-        amountOut -= tokenConsumed;
+        amountOut = (amountOut > tokenConsumed) ? amountOut - tokenConsumed : 0;
 
         require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
     }

@@ -99,6 +99,57 @@ contract CachedRouter {
         }
     }
 
+    function swap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOutMin
+    ) external payable returns (uint256 amountOut) {
+        PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
+        require(pathInfo.numPathsRegistered != 0, "CachedRouter: PATH_NOT_INITIALIZED");
+
+        if (msg.value > 0) {
+            require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
+            require(msg.value == amountIn, "CachedRouter: INCORRECT_AMOUNT_IN");
+            IWETH(WETH).deposit{value: msg.value}();
+        } else {
+            require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
+        }
+
+        uint256 curPathIndex = pathInfo.pathBeginning;
+        while (true) {
+            Path memory curPath = allPaths[curPathIndex];
+            Path memory nextPath = allPaths[curPath.next];
+            if (curPath.next == 0 || amountIn < nextPath.amount) {
+                uint256 subAmountIn;
+                uint256 arrayLength = curPath.subPathsV2.length;
+                for (uint256 i; i < arrayLength; ) {
+                    SubPathV2 memory subPath = curPath.subPathsV2[i];
+                    subAmountIn = (amountIn * subPath.percent) / 100;
+                    amountOut += ROUTER.swapExactTokensForTokens(subAmountIn, 0, subPath.path, msg.sender);
+                    unchecked {
+                        ++i;
+                    }
+                }
+
+                arrayLength = curPath.subPathsV3.length;
+                for (uint256 i; i < arrayLength; ) {
+                    SubPathV3 memory subPath = curPath.subPathsV3[i];
+                    subAmountIn = (amountIn * subPath.percent) / 100;
+                    amountOut += ROUTER.exactInput(
+                        ISwapRouter02.ExactInputParams(subPath.path, msg.sender, subAmountIn, 0)
+                    );
+                    unchecked {
+                        ++i;
+                    }
+                }
+                break;
+            }
+            curPathIndex = curPath.next;
+        }
+        require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
+    }
+
     // TODO: memory or calldata here
     // Note: Gas consumption might be reduced by quoting Uni V3 price using OracleLibrary:
     // https://github.com/Uniswap/v3-periphery/blob/51f8871aaef2263c8e8bbf4f3410880b6162cdea/contracts/libraries/OracleLibrary.sol#L49
@@ -152,57 +203,6 @@ contract CachedRouter {
         uint256 newPathIndex = allPaths.length - 1;
         allPaths[curPathIndex].next = newPathIndex;
         allPaths[newPathIndex].next = nextPathIndex;
-    }
-
-    function swap(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 amountOutMin
-    ) external payable returns (uint256 amountOut) {
-        PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
-        require(pathInfo.numPathsRegistered != 0, "CachedRouter: PATH_NOT_INITIALIZED");
-
-        if (msg.value > 0) {
-            require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
-            require(msg.value == amountIn, "CachedRouter: INCORRECT_AMOUNT_IN");
-            IWETH(WETH).deposit{value: msg.value}();
-        } else {
-            require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
-        }
-
-        uint256 curPathIndex = pathInfo.pathBeginning;
-        while (true) {
-            Path memory curPath = allPaths[curPathIndex];
-            Path memory nextPath = allPaths[curPath.next];
-            if (curPath.next == 0 || amountIn < nextPath.amount) {
-                uint256 subAmountIn;
-                uint256 arrayLength = curPath.subPathsV2.length;
-                for (uint256 i; i < arrayLength; ) {
-                    SubPathV2 memory subPath = curPath.subPathsV2[i];
-                    subAmountIn = (amountIn * subPath.percent) / 100;
-                    amountOut += ROUTER.swapExactTokensForTokens(subAmountIn, 0, subPath.path, msg.sender);
-                    unchecked {
-                        ++i;
-                    }
-                }
-
-                arrayLength = curPath.subPathsV3.length;
-                for (uint256 i; i < arrayLength; ) {
-                    SubPathV3 memory subPath = curPath.subPathsV3[i];
-                    subAmountIn = (amountIn * subPath.percent) / 100;
-                    amountOut += ROUTER.exactInput(
-                        ISwapRouter02.ExactInputParams(subPath.path, msg.sender, subAmountIn, 0)
-                    );
-                    unchecked {
-                        ++i;
-                    }
-                }
-                break;
-            }
-            curPathIndex = curPath.next;
-        }
-        require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
     }
 
     function getTokenInOut(Path calldata path) private pure returns (address tokenIn, address tokenOut) {

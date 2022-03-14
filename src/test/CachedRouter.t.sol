@@ -14,7 +14,7 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
     CachedRouter private cachedRouter;
 
     function setUp() public {
-        cachedRouter = new CachedRouter();
+        cachedRouter = new CachedRouter(6);
     }
 
     function testRegisterPathNon0First() public {
@@ -29,11 +29,11 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
         cachedRouter.registerPath(getPath1(0));
         cachedRouter.registerPath(getPath2(1e22)); // 10000 ETH
 
-        (uint256 amount1, uint256 next1) = cachedRouter.allPaths(1);
+        (uint256 amount1, uint256 next1) = cachedRouter.allPaths(0);
         assertEq(amount1, 0);
-        assertEq(next1, 2);
+        assertEq(next1, 1);
 
-        (uint256 amount2, uint256 next2) = cachedRouter.allPaths(2);
+        (uint256 amount2, uint256 next2) = cachedRouter.allPaths(1);
         assertEq(amount2, 1e22);
         assertEq(next2, 0);
     }

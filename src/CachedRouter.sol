@@ -20,7 +20,12 @@ contract CachedRouter {
 
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    mapping(address => mapping(address => uint256)) public pathBeginnings;
+    mapping(address => mapping(address => PathInfo)) public pathInfos;
+
+    struct PathInfo {
+        uint248 pathBeginning;
+        uint8 numPathsRegistered;
+    }
 
     struct SubPathV2 {
         uint256 percent; // No packing here so I am using uint256 to avoid runtime conversion from uint8 to uint256
@@ -41,9 +46,10 @@ contract CachedRouter {
 
     Path[] public allPaths;
 
-    constructor() {
-        // Waste the first array element in order to be able to check uninitialized Path by index == 0
-        allPaths.push();
+    uint8 public immutable maxPathAmount;
+
+    constructor(uint8 _maxPathAmount) {
+        maxPathAmount = _maxPathAmount;
     }
 
     function registerPath(Path calldata newPath) external {
@@ -62,14 +68,17 @@ contract CachedRouter {
             require(false, "CachedRouter: EMPTY_PATH");
         }
 
-        uint256 curPathIndex = pathBeginnings[tokenIn][tokenOut];
-        if (curPathIndex == 0) {
+        PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
+        if (pathInfo.numPathsRegistered == 0) {
             require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
             // TODO: check percent sum == 0
             // An unviable path might be provided since I am not quoting during first registration - make sure quotePath
             // returns 0 when the swap fails
             allPaths.push(newPath);
-            pathBeginnings[tokenIn][tokenOut] = allPaths.length - 1;
+            pathInfo.numPathsRegistered = 1;
+            pathInfo.pathBeginning = uint248(allPaths.length - 1);
+
+            pathInfos[tokenIn][tokenOut] = pathInfo;
 
             require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
         } else {
@@ -79,6 +88,7 @@ contract CachedRouter {
             // to calldata.
             uint256 newPathQuote = quotePath(newPath, newPath.amount, tokenOut);
 
+            uint256 curPathIndex = pathInfo.pathBeginning;
             bool notInserted = true;
             while (notInserted) {
                 Path memory curPath = allPaths[curPathIndex];
@@ -87,6 +97,10 @@ contract CachedRouter {
                     uint256 curPathQuote = quotePath(curPath, newPath.amount, tokenOut);
                     require(curPathQuote < newPathQuote, "CachedRouter: QUOTE_NOT_BETTER");
                     insertPath(newPath, curPathIndex, curPath.next);
+
+                    pathInfo.numPathsRegistered = pathInfo.numPathsRegistered + 1;
+                    pathInfos[tokenIn][tokenOut] = pathInfo;
+
                     notInserted = false;
                 }
                 curPathIndex = curPath.next;
@@ -156,8 +170,8 @@ contract CachedRouter {
         uint256 amountIn,
         uint256 amountOutMin
     ) external payable returns (uint256 amountOut) {
-        uint256 curPathIndex = pathBeginnings[tokenIn][tokenOut];
-        require(curPathIndex != 0, "CachedRouter: PATH_NOT_INITIALIZED");
+        PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
+        require(pathInfo.numPathsRegistered != 0, "CachedRouter: PATH_NOT_INITIALIZED");
 
         if (msg.value > 0) {
             require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
@@ -167,6 +181,7 @@ contract CachedRouter {
             require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
         }
 
+        uint256 curPathIndex = pathInfo.pathBeginning;
         while (true) {
             Path memory curPath = allPaths[curPathIndex];
             Path memory nextPath = allPaths[curPath.next];

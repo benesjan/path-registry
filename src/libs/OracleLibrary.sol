@@ -37,6 +37,7 @@ library OracleLibrary {
         IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
     function getQuoteAtCurrentTick(uint256 weiAmount, address quoteToken) internal view returns (uint256 quoteAmount) {
+        // TODO: what if WETH-quoteToken pool doesn't exist?
         address poolAddr = uniswapV3Factory.getPool(WETH, quoteToken, 3000);
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddr);
         (, int24 currentTick, , , , , ) = pool.slot0();

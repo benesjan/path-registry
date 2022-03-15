@@ -20,12 +20,7 @@ contract CachedRouter {
 
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    mapping(address => mapping(address => PathInfo)) public pathInfos;
-
-    struct PathInfo {
-        uint248 pathBeginning;
-        uint8 numPathsRegistered;
-    }
+    mapping(address => mapping(address => uint256)) public firstPathIndices;
 
     struct SubPathV2 {
         uint256 percent; // No packing here so I am using uint256 to avoid runtime conversion from uint8 to uint256
@@ -46,56 +41,57 @@ contract CachedRouter {
 
     Path[] public allPaths;
 
-    uint8 public immutable numPathsRegisteredLimit;
-
-    constructor(uint8 _numPathsRegisteredLimit) {
-        numPathsRegisteredLimit = _numPathsRegisteredLimit;
+    constructor() {
+        // Waste the first array element in order to be able to check uninitialized Path by index == 0
+        allPaths.push();
     }
 
     function registerPath(Path calldata newPath) external {
-        // TODO: handle path deletion and implement path amount limit
         (address tokenIn, address tokenOut) = getTokenInOut(newPath);
-        PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
+        uint256 prevPathIndex = firstPathIndices[tokenIn][tokenOut];
 
-        if (pathInfo.numPathsRegistered == 0) {
+        if (prevPathIndex == 0) {
             require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
             // TODO: check percent sum == 0
             // An unviable path might be provided since I am not quoting during first registration - make sure quotePath
             // returns 0 when the swap fails
             allPaths.push(newPath);
-            pathInfo.numPathsRegistered = 1;
-            pathInfo.pathBeginning = uint248(allPaths.length - 1);
-
-            pathInfos[tokenIn][tokenOut] = pathInfo;
+            firstPathIndices[tokenIn][tokenOut] = allPaths.length - 1;
 
             require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
         } else {
             require(newPath.amount != 0, "CachedRouter: ZERO_AMOUNT");
-            // When path limit is reached call replacePath(...) instead
-            require(pathInfo.numPathsRegistered < numPathsRegisteredLimit, "CachedRouter: PATH_LIMIT_REACHED");
-            // Note: Here newPath is copied from calldata to memory. I can't pass calldata directly to this function
-            // because later on I need to pass a storage struct (curPath) and it's impossible to copy from storage
-            // to calldata.
-            uint256 newPathQuote = quotePath(newPath, newPath.amount, tokenOut);
 
-            uint256 curPathIndex = pathInfo.pathBeginning;
-            bool notInserted = true;
-            while (notInserted) {
-                Path memory curPath = allPaths[curPathIndex];
-                Path memory nextPath = allPaths[curPath.next];
-                if (curPath.next == 0 || newPath.amount < nextPath.amount) {
-                    uint256 curPathQuote = quotePath(curPath, newPath.amount, tokenOut);
-                    require(curPathQuote < newPathQuote, "CachedRouter: QUOTE_NOT_BETTER");
-                    insertPath(newPath, curPathIndex, curPath.next);
-
-                    pathInfo.numPathsRegistered = pathInfo.numPathsRegistered + 1;
-                    pathInfos[tokenIn][tokenOut] = pathInfo;
-
-                    notInserted = false;
-                }
-                curPathIndex = curPath.next;
+            // Find the position where the new path should be inserted
+            Path memory prevPath = allPaths[prevPathIndex];
+            Path memory nextPath = allPaths[prevPath.next];
+            while (prevPath.next != 0 || newPath.amount < nextPath.amount) {
+                prevPathIndex = prevPath.next;
+                prevPath = nextPath;
+                nextPath = allPaths[prevPath.next];
             }
-            require(!notInserted, "CachedRouter: PATH_NOT_INSERTED");
+
+            // Verify that newPath's quote is better at newPath.amount than prevPath's
+            require(
+                quotePath(prevPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
+                "CachedRouter: QUOTE_NOT_BETTER"
+            );
+
+            if (
+                prevPath.next != 0 &&
+                quotePath(newPath, nextPath.amount, tokenOut) > quotePath(nextPath, nextPath.amount, tokenOut)
+            ) {
+                // Replace next paths if the new path is better
+                allPaths[prevPath.next] = newPath;
+                allPaths[prevPath.next].next = nextPath.next;
+                // TODO: try removing following paths or is it too expensive?
+            } else {
+                // Insert new path between prevPath and nextPath
+                allPaths.push(newPath);
+                uint256 newPathIndex = allPaths.length - 1;
+                allPaths[prevPathIndex].next = newPathIndex;
+                allPaths[newPathIndex].next = prevPath.next;
+            }
         }
     }
 
@@ -105,8 +101,8 @@ contract CachedRouter {
         uint256 amountIn,
         uint256 amountOutMin
     ) external payable returns (uint256 amountOut) {
-        PathInfo memory pathInfo = pathInfos[tokenIn][tokenOut];
-        require(pathInfo.numPathsRegistered != 0, "CachedRouter: PATH_NOT_INITIALIZED");
+        uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
+        require(curPathIndex != 0, "CachedRouter: PATH_NOT_INITIALIZED");
 
         if (msg.value > 0) {
             require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
@@ -116,7 +112,6 @@ contract CachedRouter {
             require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
         }
 
-        uint256 curPathIndex = pathInfo.pathBeginning;
         while (true) {
             Path memory curPath = allPaths[curPathIndex];
             Path memory nextPath = allPaths[curPath.next];
@@ -205,12 +200,12 @@ contract CachedRouter {
         allPaths[newPathIndex].next = nextPathIndex;
     }
 
-    function getTokenInOut(Path calldata path) private pure returns (address tokenIn, address tokenOut) {
+    function getTokenInOut(Path memory path) private pure returns (address tokenIn, address tokenOut) {
         if (path.subPathsV2.length != 0) {
             tokenIn = path.subPathsV2[0].path[0];
             tokenOut = path.subPathsV2[path.subPathsV2.length - 1].path[1];
         } else if (path.subPathsV3.length != 0) {
-            bytes calldata v3Path = path.subPathsV3[0].path;
+            bytes memory v3Path = path.subPathsV3[0].path;
             tokenIn = v3Path.toAddress(0);
             tokenOut = v3Path.toAddress(v3Path.length - 20);
         } else {

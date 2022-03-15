@@ -51,6 +51,7 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
 
     function testSwapERC20() public {
         cachedRouter.registerPath(getPath1(0));
+        cachedRouter.registerPath(getPath2(1e22));
 
         // give 1 ETH to address(1337) and call the next function with msg.origin = address(1337)
         uint256 amountIn = 1e18;

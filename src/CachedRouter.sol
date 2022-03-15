@@ -104,6 +104,7 @@ contract CachedRouter {
         uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
         require(curPathIndex != 0, "CachedRouter: PATH_NOT_INITIALIZED");
 
+        // 1. Convert ETH to WETH or transfer ERC20 to address(this)
         if (msg.value > 0) {
             require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
             require(msg.value == amountIn, "CachedRouter: INCORRECT_AMOUNT_IN");
@@ -112,36 +113,36 @@ contract CachedRouter {
             require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
         }
 
-        while (true) {
-            Path memory curPath = allPaths[curPathIndex];
-            Path memory nextPath = allPaths[curPath.next];
-            if (curPath.next == 0 || amountIn < nextPath.amount) {
-                uint256 subAmountIn;
-                uint256 arrayLength = curPath.subPathsV2.length;
-                for (uint256 i; i < arrayLength; ) {
-                    SubPathV2 memory subPath = curPath.subPathsV2[i];
-                    subAmountIn = (amountIn * subPath.percent) / 100;
-                    amountOut += ROUTER.swapExactTokensForTokens(subAmountIn, 0, subPath.path, msg.sender);
-                    unchecked {
-                        ++i;
-                    }
-                }
-
-                arrayLength = curPath.subPathsV3.length;
-                for (uint256 i; i < arrayLength; ) {
-                    SubPathV3 memory subPath = curPath.subPathsV3[i];
-                    subAmountIn = (amountIn * subPath.percent) / 100;
-                    amountOut += ROUTER.exactInput(
-                        ISwapRouter02.ExactInputParams(subPath.path, msg.sender, subAmountIn, 0)
-                    );
-                    unchecked {
-                        ++i;
-                    }
-                }
-                break;
-            }
-            curPathIndex = curPath.next;
+        // 2. Find the path with which to swap
+        Path memory path = allPaths[curPathIndex];
+        Path memory nextPath = allPaths[path.next];
+        while (path.next != 0 && amountIn >= nextPath.amount) {
+            path = nextPath;
+            nextPath = allPaths[path.next];
         }
+
+        // 3. Swap with curPath
+        uint256 subAmountIn;
+        uint256 arrayLength = path.subPathsV2.length;
+        for (uint256 i; i < arrayLength; ) {
+            SubPathV2 memory subPath = path.subPathsV2[i];
+            subAmountIn = (amountIn * subPath.percent) / 100;
+            amountOut += ROUTER.swapExactTokensForTokens(subAmountIn, 0, subPath.path, msg.sender);
+            unchecked {
+                ++i;
+            }
+        }
+
+        arrayLength = path.subPathsV3.length;
+        for (uint256 i; i < arrayLength; ) {
+            SubPathV3 memory subPath = path.subPathsV3[i];
+            subAmountIn = (amountIn * subPath.percent) / 100;
+            amountOut += ROUTER.exactInput(ISwapRouter02.ExactInputParams(subPath.path, msg.sender, subAmountIn, 0));
+            unchecked {
+                ++i;
+            }
+        }
+
         require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
     }
 
@@ -187,17 +188,6 @@ contract CachedRouter {
         amountOut = (amountOut > tokenConsumed) ? amountOut - tokenConsumed : 0;
 
         require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
-    }
-
-    function insertPath(
-        Path calldata newPath,
-        uint256 curPathIndex,
-        uint256 nextPathIndex
-    ) private {
-        allPaths.push(newPath);
-        uint256 newPathIndex = allPaths.length - 1;
-        allPaths[curPathIndex].next = newPathIndex;
-        allPaths[newPathIndex].next = nextPathIndex;
     }
 
     function getTokenInOut(Path memory path) private pure returns (address tokenIn, address tokenOut) {

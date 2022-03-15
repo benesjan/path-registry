@@ -38,6 +38,16 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
         assertEq(next2, 0);
     }
 
+    function testFailRegisterBrokenPathUniV2() public {
+        cachedRouter.registerPath(getPath1(0));
+        cachedRouter.registerPath(getBrokenPathUniV2(1e18));
+    }
+
+    function testFailRegisterBrokenPathUniV3() public {
+        cachedRouter.registerPath(getPath1(0));
+        cachedRouter.registerPath(getBrokenPathUniV3(1e18));
+    }
+
     function testSwapETH() public {
         cachedRouter.registerPath(getPath1(0));
 

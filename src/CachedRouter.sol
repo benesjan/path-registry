@@ -48,49 +48,56 @@ contract CachedRouter {
 
     function registerPath(Path calldata newPath) external {
         (address tokenIn, address tokenOut) = getTokenInOut(newPath);
-        uint256 prevPathIndex = firstPathIndices[tokenIn][tokenOut];
+        uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
+        Path memory curPath = allPaths[curPathIndex];
 
-        if (prevPathIndex == 0) {
-            require(newPath.amount == 0, "CachedRouter: NON_ZERO_AMOUNT");
-            // TODO: check percent sum == 0
-            // An unviable path might be provided since I am not quoting during first registration - make sure quotePath
-            // returns 0 when the swap fails
+        if (curPathIndex == 0) {
+            require(quotePath(newPath, newPath.amount, tokenOut) > 0, "CachedRouter: UNVIABLE_PATH");
+
             allPaths.push(newPath);
             firstPathIndices[tokenIn][tokenOut] = allPaths.length - 1;
 
             require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
+        } else if (newPath.amount < curPath.amount) {
+            // New path should be inserted before the first path - check whether the path is better than the current
+            // first one for a given amount even though everywhere else I am comparing new paths with the previous ones
+            require(
+                quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
+                "CachedRouter: QUOTE_NOT_BETTER"
+            );
+            allPaths.push(newPath);
+            uint256 pathIndex = allPaths.length - 1;
+            allPaths[pathIndex].next = curPathIndex;
+            firstPathIndices[tokenIn][tokenOut] = pathIndex;
         } else {
-            require(newPath.amount != 0, "CachedRouter: ZERO_AMOUNT");
-
             // Find the position where the new path should be inserted
-            Path memory prevPath = allPaths[prevPathIndex];
-            Path memory nextPath = allPaths[prevPath.next];
-            while (prevPath.next != 0 || newPath.amount < nextPath.amount) {
-                prevPathIndex = prevPath.next;
-                prevPath = nextPath;
-                nextPath = allPaths[prevPath.next];
+            Path memory nextPath = allPaths[curPath.next];
+            while (curPath.next != 0 || newPath.amount < nextPath.amount) {
+                curPathIndex = curPath.next;
+                curPath = nextPath;
+                nextPath = allPaths[curPath.next];
             }
 
             // Verify that newPath's quote is better at newPath.amount than prevPath's
             require(
-                quotePath(prevPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
+                quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
                 "CachedRouter: QUOTE_NOT_BETTER"
             );
 
             if (
-                prevPath.next != 0 &&
+                curPath.next != 0 &&
                 quotePath(newPath, nextPath.amount, tokenOut) > quotePath(nextPath, nextPath.amount, tokenOut)
             ) {
                 // Replace next paths if the new path is better
-                allPaths[prevPath.next] = newPath;
-                allPaths[prevPath.next].next = nextPath.next;
+                allPaths[curPath.next] = newPath;
+                allPaths[curPath.next].next = nextPath.next;
                 // TODO: try removing following paths or is it too expensive?
             } else {
                 // Insert new path between prevPath and nextPath
                 allPaths.push(newPath);
                 uint256 newPathIndex = allPaths.length - 1;
-                allPaths[prevPathIndex].next = newPathIndex;
-                allPaths[newPathIndex].next = prevPath.next;
+                allPaths[curPathIndex].next = newPathIndex;
+                allPaths[newPathIndex].next = curPath.next;
             }
         }
     }

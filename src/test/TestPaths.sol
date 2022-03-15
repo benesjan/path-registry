@@ -66,8 +66,8 @@ contract TestPaths {
         path.subPathsV3 = new CachedRouter.SubPathV3[](1);
 
         path.subPathsV3[0] = CachedRouter.SubPathV3({
-        percent: 100,
-        path: abi.encodePacked(WETH, uint24(500), RANDOM_ADDRESS, uint24(500), LUSD)
+            percent: 100,
+            path: abi.encodePacked(WETH, uint24(500), RANDOM_ADDRESS, uint24(500), LUSD)
         });
     }
 }

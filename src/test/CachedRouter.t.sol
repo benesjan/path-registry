@@ -17,11 +17,20 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
         cachedRouter = new CachedRouter();
     }
 
-    function testRegisterPathNon0First() public {
-        try cachedRouter.registerPath(getPath1(5)) {
-            assertTrue(false, "registerPath(..) has to revert when initializing path with non-zero amount.");
+    function testRegisterPathWith0Amount() public {
+        // Test the "if" execution path
+        try cachedRouter.registerPath(getPath1(0)) {
+            assertTrue(false, "registerPath(..) has to revert when initializing a path with zero amount.");
         } catch Error(string memory reason) {
-            assertEq(reason, "CachedRouter: NON_ZERO_AMOUNT");
+            assertEq(reason, "AS");
+        }
+
+        // Test the "else" execution path
+        cachedRouter.registerPath(getPath1(1e18));
+        try cachedRouter.registerPath(getPath1(0)) {
+            assertTrue(false, "registerPath(..) has to revert when initializing a path with zero amount.");
+        } catch Error(string memory reason) {
+            assertEq(reason, "AS");
         }
     }
 

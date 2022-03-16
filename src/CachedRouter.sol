@@ -65,10 +65,16 @@ contract CachedRouter {
                 quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
                 "CachedRouter: QUOTE_NOT_BETTER"
             );
-            allPaths.push(newPath);
-            uint256 pathIndex = allPaths.length - 1;
-            allPaths[pathIndex].next = curPathIndex;
-            firstPathIndices[tokenIn][tokenOut] = pathIndex;
+            if (quotePath(curPath, curPath.amount, tokenOut) < quotePath(newPath, curPath.amount, tokenOut)) {
+                // newPath is better even at curPath.amount - replace curPath with newPath
+                allPaths[curPathIndex] = newPath;
+                allPaths[curPathIndex].next = curPath.next;
+            } else {
+                allPaths.push(newPath);
+                uint256 pathIndex = allPaths.length - 1;
+                allPaths[pathIndex].next = curPathIndex;
+                firstPathIndices[tokenIn][tokenOut] = pathIndex;
+            }
         } else {
             // Find the position where the new path should be inserted
             Path memory nextPath = allPaths[curPath.next];

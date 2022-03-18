@@ -16,14 +16,16 @@ import "./interfaces/IUniswapV2Router01.sol";
 contract PathRegistry is IPathRegistry {
     using BytesLib for bytes;
 
-    IUniswapV2Router01 public constant QOUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    IUniswapV2Router01 public constant QUOTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
     IQuoter public constant QUOTER_V3 = IQuoter(0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6);
     ISwapRouter02 public constant ROUTER = ISwapRouter02(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
 
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
+    // @dev A mapping containing indices of the smallest amount paths.
     mapping(address => mapping(address => uint256)) public firstPathIndices;
 
+    // @dev An array used to store all the paths.
     Path[] public allPaths;
 
     constructor() {
@@ -38,7 +40,7 @@ contract PathRegistry is IPathRegistry {
         Path memory curPath = allPaths[curPathIndex];
 
         if (curPathIndex == 0) {
-            require(quotePath(newPath, newPath.amount, tokenOut) > 0, "UNVIABLE_PATH");
+            require(evaluatePath(newPath, newPath.amount, tokenOut) > 0, "UNVIABLE_PATH");
 
             allPaths.push(newPath);
             firstPathIndices[tokenIn][tokenOut] = allPaths.length - 1;
@@ -49,10 +51,10 @@ contract PathRegistry is IPathRegistry {
             // first one for a given amount even though everywhere else I am comparing new paths only with the previous
             // ones --> this is necessary to avoid spam
             require(
-                quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
+                evaluatePath(curPath, newPath.amount, tokenOut) < evaluatePath(newPath, newPath.amount, tokenOut),
                 "QUOTE_NOT_BETTER"
             );
-            if (quotePath(curPath, curPath.amount, tokenOut) < quotePath(newPath, curPath.amount, tokenOut)) {
+            if (evaluatePath(curPath, curPath.amount, tokenOut) < evaluatePath(newPath, curPath.amount, tokenOut)) {
                 // newPath is better even at curPath.amount - replace curPath with newPath
                 allPaths[curPathIndex] = newPath;
                 allPaths[curPathIndex].next = curPath.next;
@@ -76,13 +78,13 @@ contract PathRegistry is IPathRegistry {
 
             // Verify that newPath's quote is better at newPath.amount than prevPath's
             require(
-                quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
+                evaluatePath(curPath, newPath.amount, tokenOut) < evaluatePath(newPath, newPath.amount, tokenOut),
                 "QUOTE_NOT_BETTER"
             );
 
             if (
                 curPath.next != 0 &&
-                quotePath(newPath, nextPath.amount, tokenOut) > quotePath(nextPath, nextPath.amount, tokenOut)
+                evaluatePath(newPath, nextPath.amount, tokenOut) > evaluatePath(nextPath, nextPath.amount, tokenOut)
             ) {
                 // newPath is better than nextPath at nextPath.amount - save newPath at nextPath index
                 allPaths[curPath.next] = newPath;
@@ -151,28 +153,39 @@ contract PathRegistry is IPathRegistry {
         require(amountOutMin <= amountOut, "INSUFFICIENT_AMOUNT_OUT");
     }
 
-    function prunePaths(uint256 firstPathIndex, address tokenOut) private {
-        Path memory firstPath = allPaths[firstPathIndex];
-        Path memory nextPath = allPaths[firstPath.next];
+    /**
+     * @notice A function which compares a given path with the following ones. In case the following paths are worse
+     * it deletes them.
+     * @param pathIndex An index of a path which will be compared with the paths which follow it.
+     * @param tokenOut An address of tokenOut. This param is redundant because it could be extracted from path itself.
+     * I decided to keep the param here in order to safe gas (extracting the address would cost more than passing it).
+     * @return score An integer measuring a quality of the path.
+     */
+    function prunePaths(uint256 pathIndex, address tokenOut) private {
+        Path memory path = allPaths[pathIndex];
+        Path memory nextPath = allPaths[path.next];
 
-        while (quotePath(nextPath, nextPath.amount, tokenOut) <= quotePath(firstPath, nextPath.amount, tokenOut)) {
-            delete allPaths[firstPath.next];
-            firstPath.next = nextPath.next;
-            allPaths[firstPathIndex].next = nextPath.next;
-            nextPath = allPaths[firstPath.next];
+        while (evaluatePath(nextPath, nextPath.amount, tokenOut) <= evaluatePath(path, nextPath.amount, tokenOut)) {
+            delete allPaths[path.next];
+            path.next = nextPath.next;
+            allPaths[pathIndex].next = nextPath.next;
+            nextPath = allPaths[path.next];
         }
     }
 
-    // TODO: memory or calldata here
-    // Note: Gas consumption might be reduced by quoting Uni V3 price using OracleLibrary:
-    // https://github.com/Uniswap/v3-periphery/blob/51f8871aaef2263c8e8bbf4f3410880b6162cdea/contracts/libraries/OracleLibrary.sol#L49
-    // - less gas would be consumed but it would be less precise as it assumes no ticks will be crossed
-    // - it would also make estimation of swap gas cost more difficult
-    function quotePath(
+    /**
+     * @notice A function which evaluates quality of a given path for `amountIn`. Takes into consideration gas consumed.
+     * @param path A path to evaluate.
+     * @param amountIn An amount of tokenIn to get a quote for.
+     * @param tokenOut An address of tokenOut. This param is redundant because it could be extracted from path itself.
+     * I decided to keep the param here in order to safe gas (extracting the address would cost more than passing it).
+     * @return score An integer measuring a quality of a path (higher is better).
+     */
+    function evaluatePath(
         Path memory path,
         uint256 amountIn,
         address tokenOut
-    ) private returns (uint256 amountOut) {
+    ) private returns (uint256 score) {
         uint256 subAmountIn;
         uint256 percentSum;
 
@@ -181,7 +194,7 @@ contract PathRegistry is IPathRegistry {
         for (uint256 i; i < arrayLength; ) {
             SubPathV2 memory subPath = path.subPathsV2[i];
             subAmountIn = (amountIn * subPath.percent) / 100;
-            amountOut += QOUTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
+            score += QUOTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
             percentSum += subPath.percent;
             unchecked {
                 ++i;
@@ -192,7 +205,7 @@ contract PathRegistry is IPathRegistry {
         for (uint256 i; i < arrayLength; ) {
             SubPathV3 memory subPath = path.subPathsV3[i];
             subAmountIn = (amountIn * subPath.percent) / 100;
-            amountOut += QUOTER_V3.quoteExactInput(subPath.path, subAmountIn);
+            score += QUOTER_V3.quoteExactInput(subPath.path, subAmountIn);
             percentSum += subPath.percent;
             unchecked {
                 ++i;
@@ -202,11 +215,16 @@ contract PathRegistry is IPathRegistry {
         // to quoting. However it should be a good enough approximation.
         uint256 weiConsumed = (gasLeftBefore - gasleft()) * tx.gasprice;
         uint256 tokenConsumed = OracleLibrary.getQuoteAtCurrentTick(weiConsumed, tokenOut);
-        amountOut = (amountOut > tokenConsumed) ? amountOut - tokenConsumed : 0;
+        score = (score > tokenConsumed) ? score - tokenConsumed : 0;
 
         require(percentSum == 100, "INCORRECT_PERC_SUM");
     }
 
+    /**
+     * @notice Returns input and output token from a multihop path.
+     * @param path A path from which the input and output token will be extracted.
+     * @return tokenIn, tokenOut Addresses of the first and lass token in the path.
+     */
     function getTokenInOut(Path memory path) private pure returns (address tokenIn, address tokenOut) {
         if (path.subPathsV2.length != 0) {
             tokenIn = path.subPathsV2[0].path[0];

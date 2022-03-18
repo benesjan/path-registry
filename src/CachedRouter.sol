@@ -69,6 +69,7 @@ contract CachedRouter {
                 // newPath is better even at curPath.amount - replace curPath with newPath
                 allPaths[curPathIndex] = newPath;
                 allPaths[curPathIndex].next = curPath.next;
+                prunePaths(curPathIndex, tokenOut);
             } else {
                 allPaths.push(newPath);
                 uint256 pathIndex = allPaths.length - 1;
@@ -94,10 +95,10 @@ contract CachedRouter {
                 curPath.next != 0 &&
                 quotePath(newPath, nextPath.amount, tokenOut) > quotePath(nextPath, nextPath.amount, tokenOut)
             ) {
-                // Replace next paths if the new path is better
+                // Put the newPath on the nextPath's index since newPath is better even at nextPath.amount
                 allPaths[curPath.next] = newPath;
                 allPaths[curPath.next].next = nextPath.next;
-                // TODO: try removing following paths or is it too expensive?
+                prunePaths(curPath.next, tokenOut);
             } else {
                 // Insert new path between prevPath and nextPath
                 allPaths.push(newPath);
@@ -157,6 +158,18 @@ contract CachedRouter {
         }
 
         require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
+    }
+
+    function prunePaths(uint256 firstPathIndex, address tokenOut) private {
+        Path memory firstPath = allPaths[firstPathIndex];
+        Path memory nextPath = allPaths[firstPath.next];
+
+        while (quotePath(nextPath, nextPath.amount, tokenOut) <= quotePath(firstPath, nextPath.amount, tokenOut)) {
+            delete allPaths[firstPath.next];
+            firstPath.next = nextPath.next;
+            allPaths[firstPathIndex].next = nextPath.next;
+            nextPath = allPaths[firstPath.next];
+        }
     }
 
     // TODO: memory or calldata here

@@ -25,13 +25,15 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
             assertEq(reason, "AS");
         }
 
-        // Test the "else" execution path
+        // Test the "else if" execution path
         cachedRouter.registerPath(getPath1(1e18));
         try cachedRouter.registerPath(getPath1(0)) {
             assertTrue(false, "registerPath(..) has to revert when initializing a path with zero amount.");
         } catch Error(string memory reason) {
             assertEq(reason, "AS");
         }
+
+        // "else" execution path can't be reached with a path with 0 amount
     }
 
     function testRegisterPath() public {
@@ -78,6 +80,10 @@ contract CachedRouterTest is DSTest, stdCheats, TestPaths {
     function testFailRegisterBrokenPathUniV3() public {
         cachedRouter.registerPath(getPath1(0));
         cachedRouter.registerPath(getBrokenPathUniV3(1e18));
+    }
+
+    function testPathPruning() public {
+        // TODO
     }
 
     function testSwapFuzz(uint96 amountIn) public {

@@ -11,7 +11,7 @@ import "./interfaces/IQuoter.sol";
 import "./interfaces/ISwapRouter02.sol";
 import "./interfaces/IUniswapV2Router01.sol";
 
-contract CachedRouter {
+contract PathRegistry {
     using BytesLib for bytes;
 
     IUniswapV2Router01 public constant QOUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
@@ -52,19 +52,19 @@ contract CachedRouter {
         Path memory curPath = allPaths[curPathIndex];
 
         if (curPathIndex == 0) {
-            require(quotePath(newPath, newPath.amount, tokenOut) > 0, "CachedRouter: UNVIABLE_PATH");
+            require(quotePath(newPath, newPath.amount, tokenOut) > 0, "UNVIABLE_PATH");
 
             allPaths.push(newPath);
             firstPathIndices[tokenIn][tokenOut] = allPaths.length - 1;
 
-            require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
+            require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "APPROVE_FAILED");
         } else if (newPath.amount < curPath.amount) {
             // New path should be inserted before the first path - check whether the path is better than the current
             // first one for a given amount even though everywhere else I am comparing new paths only with the previous
             // ones --> this is necessary to avoid spam
             require(
                 quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
-                "CachedRouter: QUOTE_NOT_BETTER"
+                "QUOTE_NOT_BETTER"
             );
             if (quotePath(curPath, curPath.amount, tokenOut) < quotePath(newPath, curPath.amount, tokenOut)) {
                 // newPath is better even at curPath.amount - replace curPath with newPath
@@ -90,7 +90,7 @@ contract CachedRouter {
             // Verify that newPath's quote is better at newPath.amount than prevPath's
             require(
                 quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
-                "CachedRouter: QUOTE_NOT_BETTER"
+                "QUOTE_NOT_BETTER"
             );
 
             if (
@@ -118,15 +118,15 @@ contract CachedRouter {
         uint256 amountOutMin
     ) external payable returns (uint256 amountOut) {
         uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
-        require(curPathIndex != 0, "CachedRouter: PATH_NOT_INITIALIZED");
+        require(curPathIndex != 0, "PATH_NOT_INITIALIZED");
 
         // 1. Convert ETH to WETH or transfer ERC20 to address(this)
         if (msg.value > 0) {
-            require(tokenIn == WETH, "CachedRouter: NON_WETH_INPUT");
-            require(msg.value == amountIn, "CachedRouter: INCORRECT_AMOUNT_IN");
+            require(tokenIn == WETH, "NON_WETH_INPUT");
+            require(msg.value == amountIn, "INCORRECT_AMOUNT_IN");
             IWETH(WETH).deposit{value: msg.value}();
         } else {
-            require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
+            require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER_FAILED");
         }
 
         // 2. Find the swap path
@@ -159,7 +159,7 @@ contract CachedRouter {
             }
         }
 
-        require(amountOutMin <= amountOut, "CachedRouter: INSUFFICIENT_AMOUNT_OUT");
+        require(amountOutMin <= amountOut, "INSUFFICIENT_AMOUNT_OUT");
     }
 
     function prunePaths(uint256 firstPathIndex, address tokenOut) private {
@@ -215,7 +215,7 @@ contract CachedRouter {
         uint256 tokenConsumed = OracleLibrary.getQuoteAtCurrentTick(weiConsumed, tokenOut);
         amountOut = (amountOut > tokenConsumed) ? amountOut - tokenConsumed : 0;
 
-        require(percentSum == 100, "CachedRouter: INCORRECT_PERC_SUM");
+        require(percentSum == 100, "INCORRECT_PERC_SUM");
     }
 
     function getTokenInOut(Path memory path) private pure returns (address tokenIn, address tokenOut) {
@@ -227,7 +227,7 @@ contract CachedRouter {
             tokenIn = v3Path.toAddress(0);
             tokenOut = v3Path.toAddress(v3Path.length - 20);
         } else {
-            require(false, "CachedRouter: EMPTY_PATH");
+            require(false, "EMPTY_PATH");
         }
     }
 }

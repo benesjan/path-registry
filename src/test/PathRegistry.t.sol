@@ -37,26 +37,77 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
     }
 
     function testRegisterPath() public {
-        pathRegistry.registerPath(getPath0(1e16));
+        // 1ST PATH REGISTRATION
         pathRegistry.registerPath(getPath1(3e17));
-        pathRegistry.registerPath(getPath2(4e19));
-        pathRegistry.registerPath(getPath3(32e19));
+
+        // Test whether firstPathIndex was correctly set to 1
+        uint firstPathIndex = pathRegistry.firstPathIndices(WETH, LUSD);
+        assertEq(firstPathIndex, 1);
 
         (uint256 amount1, uint256 next1) = pathRegistry.allPaths(1);
-        assertEq(amount1, 1e16);
-        assertEq(next1, 2);
+        assertEq(amount1, 3e17);
+        assertEq(next1, 0);
+
+        // 2ND PATH REGISTRATION - since the path is of smaller amount it should be placed at the first position
+        // Index order should be 2, 1
+        pathRegistry.registerPath(getPath0(1e16));
+
+        // Test whether firstPathIndex was correctly changed to 2
+        firstPathIndex = pathRegistry.firstPathIndices(WETH, LUSD);
+        assertEq(firstPathIndex, 2);
 
         (uint256 amount2, uint256 next2) = pathRegistry.allPaths(2);
-        assertEq(amount2, 3e17);
-        assertEq(next2, 3);
+        assertEq(amount2, 1e16);
+        assertEq(next2, 1);
+
+        (amount1, next1) = pathRegistry.allPaths(1);
+        assertEq(amount1, 3e17);
+        assertEq(next1, 0);
+
+        // 3RD PATH REGISTRATION - should be inserted at the end
+        // Index order should be 2, 1, 3
+        pathRegistry.registerPath(getPath3(32e19));
+
+        // First path index should stay the same
+        firstPathIndex = pathRegistry.firstPathIndices(WETH, LUSD);
+        assertEq(firstPathIndex, 2);
+
+        (amount2, next2) = pathRegistry.allPaths(2);
+        assertEq(amount2, 1e16);
+        assertEq(next2, 1);
+
+        (amount1, next1) = pathRegistry.allPaths(1);
+        assertEq(amount1, 3e17);
+        assertEq(next1, 3);
 
         (uint256 amount3, uint256 next3) = pathRegistry.allPaths(3);
-        assertEq(amount3, 4e19);
-        assertEq(next3, 4);
+        assertEq(amount3, 32e19);
+        assertEq(next3, 0);
+
+
+        // 4TH PATH REGISTRATION - should be inserted before the last one
+        // Index order should be 2, 1, 4, 3
+        pathRegistry.registerPath(getPath2(4e19));
+
+        // First path index should stay the same
+        firstPathIndex = pathRegistry.firstPathIndices(WETH, LUSD);
+        assertEq(firstPathIndex, 2);
+
+        (amount2, next2) = pathRegistry.allPaths(2);
+        assertEq(amount2, 1e16);
+        assertEq(next2, 1);
+
+        (amount1, next1) = pathRegistry.allPaths(1);
+        assertEq(amount1, 3e17);
+        assertEq(next1, 4);
 
         (uint256 amount4, uint256 next4) = pathRegistry.allPaths(4);
-        assertEq(amount4, 32e19);
-        assertEq(next4, 0);
+        assertEq(amount4, 4e19);
+        assertEq(next4, 3);
+
+        (amount3, next3) = pathRegistry.allPaths(3);
+        assertEq(amount3, 32e19);
+        assertEq(next3, 0);
     }
 
     /**

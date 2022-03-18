@@ -60,7 +60,8 @@ contract CachedRouter {
             require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "CachedRouter: APPROVE_FAILED");
         } else if (newPath.amount < curPath.amount) {
             // New path should be inserted before the first path - check whether the path is better than the current
-            // first one for a given amount even though everywhere else I am comparing new paths with the previous ones
+            // first one for a given amount even though everywhere else I am comparing new paths only with the previous
+            // ones --> this is necessary to avoid spam
             require(
                 quotePath(curPath, newPath.amount, tokenOut) < quotePath(newPath, newPath.amount, tokenOut),
                 "CachedRouter: QUOTE_NOT_BETTER"
@@ -71,6 +72,7 @@ contract CachedRouter {
                 allPaths[curPathIndex].next = curPath.next;
                 prunePaths(curPathIndex, tokenOut);
             } else {
+                // If newPath is worse at curPath.amount insert the path at the first position
                 allPaths.push(newPath);
                 uint256 pathIndex = allPaths.length - 1;
                 allPaths[pathIndex].next = curPathIndex;
@@ -95,7 +97,7 @@ contract CachedRouter {
                 curPath.next != 0 &&
                 quotePath(newPath, nextPath.amount, tokenOut) > quotePath(nextPath, nextPath.amount, tokenOut)
             ) {
-                // Put the newPath on the nextPath's index since newPath is better even at nextPath.amount
+                // newPath is better than nextPath at nextPath.amount - save newPath at nextPath index
                 allPaths[curPath.next] = newPath;
                 allPaths[curPath.next].next = nextPath.next;
                 prunePaths(curPath.next, tokenOut);
@@ -127,7 +129,7 @@ contract CachedRouter {
             require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "CachedRouter: TRANSFER_FAILED");
         }
 
-        // 2. Find the path with which to swap
+        // 2. Find the swap path
         Path memory path = allPaths[curPathIndex];
         Path memory nextPath = allPaths[path.next];
         while (path.next != 0 && amountIn >= nextPath.amount) {
@@ -135,7 +137,7 @@ contract CachedRouter {
             nextPath = allPaths[path.next];
         }
 
-        // 3. Swap with curPath
+        // 3. Swap
         uint256 subAmountIn;
         uint256 arrayLength = path.subPathsV2.length;
         for (uint256 i; i < arrayLength; ) {

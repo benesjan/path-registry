@@ -70,7 +70,8 @@ contract PathRegistry {
                 // newPath is better even at curPath.amount - replace curPath with newPath
                 allPaths[curPathIndex] = newPath;
                 allPaths[curPathIndex].next = curPath.next;
-                prunePaths(curPathIndex, tokenOut);
+                // I didn't put the condition inside prunePaths to avoid 1 SLOAD
+                if (curPath.next != 0) prunePaths(curPathIndex, tokenOut);
             } else {
                 // If newPath is worse at curPath.amount insert the path at the first position
                 allPaths.push(newPath);
@@ -100,7 +101,8 @@ contract PathRegistry {
                 // newPath is better than nextPath at nextPath.amount - save newPath at nextPath index
                 allPaths[curPath.next] = newPath;
                 allPaths[curPath.next].next = nextPath.next;
-                prunePaths(curPath.next, tokenOut);
+                // I didn't put the condition inside prunePaths to avoid 1 SLOAD
+                if (nextPath.next != 0) prunePaths(curPath.next, tokenOut);
             } else {
                 // Insert new path between prevPath and nextPath
                 allPaths.push(newPath);

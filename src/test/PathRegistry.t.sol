@@ -41,7 +41,7 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
         pathRegistry.registerPath(getPath1(3e17));
 
         // Test whether firstPathIndex was correctly set to 1
-        uint firstPathIndex = pathRegistry.firstPathIndices(WETH, LUSD);
+        uint256 firstPathIndex = pathRegistry.firstPathIndices(WETH, LUSD);
         assertEq(firstPathIndex, 1);
 
         (uint256 amount1, uint256 next1) = pathRegistry.allPaths(1);
@@ -83,7 +83,6 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
         (uint256 amount3, uint256 next3) = pathRegistry.allPaths(3);
         assertEq(amount3, 32e19);
         assertEq(next3, 0);
-
 
         // 4TH PATH REGISTRATION - should be inserted before the last one
         // Index order should be 2, 1, 4, 3

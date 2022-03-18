@@ -8,10 +8,12 @@ import "./libs/OracleLibrary.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IQuoter.sol";
+import "./interfaces/IPathRegistry.sol";
 import "./interfaces/ISwapRouter02.sol";
 import "./interfaces/IUniswapV2Router01.sol";
 
-contract PathRegistry {
+// @inheritdoc IPathRegistry
+contract PathRegistry is IPathRegistry {
     using BytesLib for bytes;
 
     IUniswapV2Router01 public constant QOUTER_V2 = IUniswapV2Router01(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
@@ -22,23 +24,6 @@ contract PathRegistry {
 
     mapping(address => mapping(address => uint256)) public firstPathIndices;
 
-    struct SubPathV2 {
-        uint256 percent; // No packing here so I am using uint256 to avoid runtime conversion from uint8 to uint256
-        address[] path;
-    }
-
-    struct SubPathV3 {
-        uint256 percent;
-        bytes path;
-    }
-
-    struct Path {
-        uint256 amount; // Amount at which the path starts being valid
-        uint256 next;
-        SubPathV2[] subPathsV2;
-        SubPathV3[] subPathsV3;
-    }
-
     Path[] public allPaths;
 
     constructor() {
@@ -46,7 +31,8 @@ contract PathRegistry {
         allPaths.push();
     }
 
-    function registerPath(Path calldata newPath) external {
+    // @inheritdoc IPathRegistry
+    function registerPath(Path calldata newPath) external override {
         (address tokenIn, address tokenOut) = getTokenInOut(newPath);
         uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
         Path memory curPath = allPaths[curPathIndex];
@@ -113,6 +99,7 @@ contract PathRegistry {
         }
     }
 
+    // @inheritdoc IPathRegistry
     function swap(
         address tokenIn,
         address tokenOut,

@@ -81,7 +81,7 @@ contract PathRegistry {
         } else {
             // Find the position where the new path should be inserted
             Path memory nextPath = allPaths[curPath.next];
-            while (curPath.next != 0 || newPath.amount < nextPath.amount) {
+            while (curPath.next != 0 && newPath.amount > nextPath.amount) {
                 curPathIndex = curPath.next;
                 curPath = nextPath;
                 nextPath = allPaths[curPath.next];

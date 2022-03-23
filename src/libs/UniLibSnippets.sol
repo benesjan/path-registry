@@ -24,18 +24,16 @@ interface IUniswapV3Pool {
         );
 }
 
-/// @title Oracle library
-/// @notice Provides functions to integrate with V3 pool oracle
-library OracleLibrary {
-    /// @dev The minimum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**-128
-    int24 internal constant MIN_TICK = -887272;
+/// @title Pieces of code from OracleLib.sol, TickMath.sol and FullMath.sol ported to solidity ^0.8.0
+library UniLibSnippets {
     /// @dev The maximum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**128
-    int24 internal constant MAX_TICK = -MIN_TICK;
+    uint256 internal constant MAX_TICK = 887272;
     address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     IUniswapV3Factory internal constant uniswapV3Factory =
         IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
+    /// @notice Fetches current tick from a WETH-quoteToken pool and calls getQuoteAtTick(...)
     function getQuoteAtCurrentTick(uint256 weiAmount, address quoteToken) internal view returns (uint256 quoteAmount) {
         // TODO: what if WETH-quoteToken pool doesn't exist?
         address poolAddr = uniswapV3Factory.getPool(WETH, quoteToken, 3000);
@@ -50,6 +48,7 @@ library OracleLibrary {
     /// @param baseToken Address of an ERC20 token contract used as the baseAmount denomination
     /// @param quoteToken Address of an ERC20 token contract used as the quoteAmount denomination
     /// @return quoteAmount Amount of quoteToken received for baseAmount of baseToken
+    // From OracleLibrary.sol
     function getQuoteAtTick(
         int24 tick,
         uint128 baseAmount,
@@ -75,6 +74,7 @@ library OracleLibrary {
     // From TickMath.sol
     function getSqrtRatioAtTick(int24 tick) internal pure returns (uint160 sqrtPriceX96) {
         uint256 absTick = tick < 0 ? uint256(-int256(tick)) : uint256(int256(tick));
+        require(absTick <= MAX_TICK, "T");
 
         uint256 ratio = absTick & 0x1 != 0 ? 0xfffcb933bd6fad37aa2d162d1a594001 : 0x100000000000000000000000000000000;
         if (absTick & 0x2 != 0) ratio = (ratio * 0xfff97272373d413259a46990580e213a) >> 128;
@@ -156,6 +156,8 @@ library OracleLibrary {
         // Factor powers of two out of denominator
         // Compute largest power of two divisor of denominator.
         // Always >= 1.
+        // Note: this line was modified during conversion to solidity ^0.8.0 according to the following post:
+        // https://ethereum.stackexchange.com/a/96646/61123
         uint256 twos = denominator & (~denominator + 1);
         // Divide denominator by power of two
         assembly {

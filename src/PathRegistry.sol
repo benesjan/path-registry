@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "./libs/BytesLib.sol";
-import "./libs/OracleLibrary.sol";
+import "./libs/UniLibSnippets.sol";
 
 import "./interfaces/IWETH.sol";
 import "./interfaces/IERC20.sol";
@@ -213,7 +213,7 @@ contract PathRegistry is IPathRegistry {
         // Note: this value does not precisely represent gas consumed during swaps since swaps are not exactly equal
         // to quoting. However it should be a good enough approximation.
         uint256 weiConsumed = (gasLeftBefore - gasleft()) * tx.gasprice;
-        uint256 tokenConsumed = OracleLibrary.getQuoteAtCurrentTick(weiConsumed, tokenOut);
+        uint256 tokenConsumed = UniLibSnippets.getQuoteAtCurrentTick(weiConsumed, tokenOut);
         score = (score > tokenConsumed) ? score - tokenConsumed : 0;
 
         require(percentSum == 100, "INCORRECT_PERC_SUM");

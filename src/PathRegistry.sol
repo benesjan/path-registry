@@ -22,10 +22,10 @@ contract PathRegistry is IPathRegistry {
 
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    // @dev A mapping containing indices of the smallest amount paths.
+    // @dev A mapping containing indices of the smallest amount paths
     mapping(address => mapping(address => uint256)) public firstPathIndices;
 
-    // @dev An array used to store all the paths.
+    // @dev An array used to store all the paths
     Path[] public allPaths;
 
     constructor() {
@@ -154,12 +154,10 @@ contract PathRegistry is IPathRegistry {
     }
 
     /**
-     * @notice A function which compares a given path with the following ones. In case the following paths are worse
-     * it deletes them.
-     * @param pathIndex An index of a path which will be compared with the paths which follow it.
-     * @param tokenOut An address of tokenOut. This param is redundant because it could be extracted from path itself.
-     * I decided to keep the param here in order to safe gas (extracting the address would cost more than passing it).
-     * @return score An integer measuring a quality of the path.
+     * @notice Compares a given path with the following ones and if the following paths are worse deletes them
+     * @param pathIndex An index of a path which will be compared with the paths which follow
+     * @param tokenOut An address of tokenOut (@dev This param is redundant because it could be extracted from
+     * the path itself. I keep the param here in order to save gas.)
      */
     function prunePaths(uint256 pathIndex, address tokenOut) private {
         Path memory path = allPaths[pathIndex];
@@ -174,12 +172,13 @@ contract PathRegistry is IPathRegistry {
     }
 
     /**
-     * @notice A function which evaluates quality of a given path for `amountIn`. Takes into consideration gas consumed.
-     * @param path A path to evaluate.
-     * @param amountIn An amount of tokenIn to get a quote for.
-     * @param tokenOut An address of tokenOut. This param is redundant because it could be extracted from path itself.
-     * I decided to keep the param here in order to safe gas (extracting the address would cost more than passing it).
-     * @return score An integer measuring a quality of a path (higher is better).
+     * @notice Evaluates quality of a given path for `amountIn`
+     * @param path A path to evaluate
+     * @param amountIn An amount of tokenIn to get a quote for
+     * @param tokenOut An address of tokenOut (@dev This param is redundant because it could be extracted from
+     * the path itself. I keep the param here in order to save gas.)
+     * @return score An integer measuring a quality of a path (higher is better)
+     * @dev This method takes into consideration quote and gas consumed
      */
     function evaluatePath(
         Path memory path,
@@ -221,9 +220,10 @@ contract PathRegistry is IPathRegistry {
     }
 
     /**
-     * @notice Returns input and output token from a multihop path.
-     * @param path A path from which the input and output token will be extracted.
-     * @return tokenIn, tokenOut Addresses of the first and lass token in the path.
+     * @notice Returns input and output token from a multihop path
+     * @param path A path from which the input and output token will be extracted
+     * @return tokenIn Addresses of the first token in the path (input token)
+     * @return tokenOut Addresses of the last token in the path (output token)
      */
     function getTokenInOut(Path memory path) private pure returns (address tokenIn, address tokenOut) {
         if (path.subPathsV2.length != 0) {

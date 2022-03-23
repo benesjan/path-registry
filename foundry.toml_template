@@ -1,0 +1,7 @@
+[default]
+src = 'src'
+out = 'out'
+libs = ['lib']
+remappings = ['ds-test/=lib/ds-test/src/', 'forge-std/=lib/forge-std/src/']
+eth-rpc-url = 'ARCHIVE_NODE_RPC_URL'
+fork_block_number = 14411926

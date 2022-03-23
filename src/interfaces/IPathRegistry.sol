@@ -10,6 +10,11 @@ pragma solidity ^0.8.0;
  *      1. A registration and a quality verification of Uniswap v2 and v3 paths
  *      2. Swapping tokens using the registered paths - a path is selected based on the input and output token addresses
  *         and the amount of input token to swap
+ *
+ *      For each registered tokenIn-tokenOut pair there is a linked list of Path structs sorted by amount in
+ *      an ascending order. This linked list can be iterated through using the next parameter. Each path is valid
+ *      in a range [path.amount, nextPath.amount). If path.next doesn't exist, the path is valid
+ *      in [path.amount, infinity).
  */
 interface IPathRegistry {
     struct SubPathV2 {
@@ -31,7 +36,7 @@ interface IPathRegistry {
 
     /**
      * @notice Verifies and registers a new path
-     * @param newPath A path to register
+     * @param newPath A path to register (newPath.next parameter is irrelevant because it's computed later on)
      * @dev Reverts when the new path doesn't have a better quote than the previous path at newPath.amount
      */
     function registerPath(Path calldata newPath) external;

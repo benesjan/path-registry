@@ -47,9 +47,8 @@ contract PathRegistry is IPathRegistry {
 
             require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "APPROVE_FAILED");
         } else if (newPath.amount < curPath.amount) {
-            // New path should be inserted before the first path - check whether the path is better than the current
-            // first one for a given amount even though everywhere else I am comparing new paths only with the previous
-            // ones --> this is necessary to avoid spam
+            // New path should be inserted before the first path
+            // Check whether newPath is better than the current first path at newPath.amount
             require(
                 evaluatePath(curPath, newPath.amount, tokenOut) < evaluatePath(newPath, newPath.amount, tokenOut),
                 "QUOTE_NOT_BETTER"
@@ -61,14 +60,15 @@ contract PathRegistry is IPathRegistry {
                 // I didn't put the condition inside prunePaths to avoid 1 SLOAD
                 if (curPath.next != 0) prunePaths(curPathIndex, tokenOut);
             } else {
-                // If newPath is worse at curPath.amount insert the path at the first position
+                // newPath is worse at curPath.amount - insert the path at the first position
                 allPaths.push(newPath);
                 uint256 pathIndex = allPaths.length - 1;
                 allPaths[pathIndex].next = curPathIndex;
                 firstPathIndices[tokenIn][tokenOut] = pathIndex;
             }
         } else {
-            // Find the position where the new path should be inserted
+            // Since newPath.amount > curPath.amount the path will not be inserted at the first position and for this
+            // reason we have compute where the new path should be inserted
             Path memory nextPath = allPaths[curPath.next];
             while (curPath.next != 0 && newPath.amount > nextPath.amount) {
                 curPathIndex = curPath.next;
@@ -120,7 +120,8 @@ contract PathRegistry is IPathRegistry {
             require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER_FAILED");
         }
 
-        // 2. Find the swap path
+        // 2. Find the swap path - iterate through the tokenIn-tokenOut linked list and select the first path whose
+        // next path doesn't exist or next path's amount is bigger than amountIn
         Path memory path = allPaths[curPathIndex];
         Path memory nextPath = allPaths[path.next];
         while (path.next != 0 && amountIn >= nextPath.amount) {
@@ -155,9 +156,11 @@ contract PathRegistry is IPathRegistry {
 
     /**
      * @notice Compares a given path with the following ones and if the following paths are worse deletes them
-     * @param pathIndex An index of a path which will be compared with the paths which follow
+     * @param pathIndex An index of a path which will be compared with the paths that follow
      * @param tokenOut An address of tokenOut (@dev This param is redundant because it could be extracted from
      * the path itself. I keep the param here in order to save gas.)
+     * @dev This method was implemented in order to keep the amount of stored paths low - this is very desirable
+     * because paths are being iterated through during swap
      */
     function prunePaths(uint256 pathIndex, address tokenOut) private {
         Path memory path = allPaths[pathIndex];

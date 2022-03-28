@@ -181,4 +181,22 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
         pathRegistry.swap{value: amountIn}(WETH, LUSD, amountIn, 0);
         assertGt(IERC20(LUSD).balanceOf(address(1337)), 0);
     }
+
+    function testSwapMinAmountEnforced() public {
+        pathRegistry.registerPath(getPath1(3e17));
+        pathRegistry.registerPath(getPath5(1e22));
+
+        // give 1 ETH to address(1337) and call the next function with msg.origin = address(1337)
+        uint256 amountIn = 1e18;
+
+        startHoax(address(1337), amountIn);
+        IWETH(WETH).deposit{value: amountIn}();
+        IERC20(WETH).approve(address(pathRegistry), amountIn);
+
+        try pathRegistry.swap(WETH, LUSD, amountIn, type(uint256).max) {
+            assertTrue(false, "swap(..) should revert when amountOut <  amountIn.");
+        } catch Error(string memory reason) {
+            assertEq(reason, "INSUFFICIENT_AMOUNT_OUT");
+        }
+    }
 }

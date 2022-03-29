@@ -132,6 +132,14 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
         pathRegistry.registerPath(getBrokenPathUniV3(1e18));
     }
 
+    function testEthPoolHasToExist() public {
+        try pathRegistry.registerPath(getPathNoEthPool(1e17)) {
+            assertTrue(false, "registerPath(..) has to revert when ETH pool doesn't exist.");
+        } catch Error(string memory reason) {
+            assertEq(reason, "NONEXISTENT_ETH_POOL");
+        }
+    }
+
     function testPathPruning() public {
         // TODO
     }

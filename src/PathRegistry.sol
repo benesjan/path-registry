@@ -40,6 +40,7 @@ contract PathRegistry is IPathRegistry {
         Path memory curPath = allPaths[curPathIndex];
 
         if (curPathIndex == 0) {
+            require(UniLibSnippets.ethPoolExists(tokenOut), "NONEXISTENT_ETH_POOL");
             require(evaluatePath(newPath, newPath.amount, tokenOut) > 0, "UNVIABLE_PATH");
 
             allPaths.push(newPath);

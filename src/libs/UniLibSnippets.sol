@@ -33,9 +33,12 @@ library UniLibSnippets {
     IUniswapV3Factory internal constant uniswapV3Factory =
         IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
+    function ethPoolExists(address quoteToken) internal view returns (bool poolExists) {
+        poolExists = uniswapV3Factory.getPool(WETH, quoteToken, 3000) != address(0);
+    }
+
     /// @notice Fetches current tick from a WETH-quoteToken pool and calls getQuoteAtTick(...)
     function getQuoteAtCurrentTick(uint256 weiAmount, address quoteToken) internal view returns (uint256 quoteAmount) {
-        // TODO: what if WETH-quoteToken pool doesn't exist?
         address poolAddr = uniswapV3Factory.getPool(WETH, quoteToken, 3000);
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddr);
         (, int24 currentTick, , , , , ) = pool.slot0();

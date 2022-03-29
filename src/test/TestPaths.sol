@@ -129,4 +129,14 @@ contract TestPaths {
             path: abi.encodePacked(WETH, uint24(500), RANDOM_ADDRESS, uint24(500), LUSD)
         });
     }
+
+    function getPathNoEthPool(uint256 amount) internal pure returns (IPathRegistry.Path memory path) {
+        path.amount = amount;
+        path.subPathsV3 = new IPathRegistry.SubPathV3[](1);
+
+        path.subPathsV3[0] = IPathRegistry.SubPathV3({
+            percent: 100,
+            path: abi.encodePacked(WETH, uint24(500), RANDOM_ADDRESS)
+        });
+    }
 }

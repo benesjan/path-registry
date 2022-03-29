@@ -37,7 +37,8 @@ interface IPathRegistry {
     /**
      * @notice Verifies and registers a new path
      * @param newPath A path to register (newPath.next parameter is irrelevant because it's computed later on)
-     * @dev Reverts when the new path doesn't have a better quote than the previous path at newPath.amount
+     * @dev Reverts when the new path doesn't have a better quote than the previous path at newPath.amount or when
+     *      Uniswap v3 ETH-tokenOut 3000 BIPS fee pool doesn't exist (this pool is needed for gas intensity evaluation).
      */
     function registerPath(Path calldata newPath) external;
 

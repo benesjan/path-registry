@@ -154,6 +154,47 @@ contract PathRegistry is IPathRegistry {
         require(amountOutMin <= amountOut, "INSUFFICIENT_AMOUNT_OUT");
     }
 
+    // @inheritdoc IPathRegistry
+    function quote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) external returns (uint256 amountOut) {
+        uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
+        require(curPathIndex != 0, "PATH_NOT_INITIALIZED");
+
+        // 1. Find the swap path - iterate through the tokenIn-tokenOut linked list and select the first path whose
+        // next path doesn't exist or next path's amount is bigger than amountIn
+        Path memory path = allPaths[curPathIndex];
+        Path memory nextPath = allPaths[path.next];
+        while (path.next != 0 && amountIn >= nextPath.amount) {
+            path = nextPath;
+            nextPath = allPaths[path.next];
+        }
+
+        // Get quote
+        uint256 subAmountIn;
+        uint256 arrayLength = path.subPathsV2.length;
+        for (uint256 i; i < arrayLength; ) {
+            SubPathV2 memory subPath = path.subPathsV2[i];
+            subAmountIn = (amountIn * subPath.percent) / 100;
+            amountOut += QUOTER_V2.getAmountsOut(subAmountIn, subPath.path)[subPath.path.length - 1];
+            unchecked {
+                ++i;
+            }
+        }
+
+        arrayLength = path.subPathsV3.length;
+        for (uint256 i; i < arrayLength; ) {
+            SubPathV3 memory subPath = path.subPathsV3[i];
+            subAmountIn = (amountIn * subPath.percent) / 100;
+            amountOut += QUOTER_V3.quoteExactInput(subPath.path, subAmountIn);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     /**
      * @notice Compares a given path with the following ones and if the following paths are worse deletes them
      * @param pathIndex An index of a path which will be compared with the paths that follow

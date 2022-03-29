@@ -199,4 +199,11 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
             assertEq(reason, "INSUFFICIENT_AMOUNT_OUT");
         }
     }
+
+    function testQuote() public {
+        pathRegistry.registerPath(getPath5(3e17));
+
+        uint256 quotedAmount = pathRegistry.quote(WETH, LUSD, 1e18);
+        assertGt(quotedAmount, 0);
+    }
 }

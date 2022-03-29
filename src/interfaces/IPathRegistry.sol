@@ -48,8 +48,8 @@ interface IPathRegistry {
      * @param tokenOut An address of a token to buy
      * @param amountIn An amount of `tokenIn` to swap
      * @param amountOutMin Minimum amount of tokenOut to receive (inactive when set to 0)
-     * @return amountOut The amount of token received
-     * @dev Reverts when path is not found
+     * @return amountOut An amount of token received
+     * @dev Reverts when a path is not found
      */
     function swap(
         address tokenIn,
@@ -57,4 +57,18 @@ interface IPathRegistry {
         uint256 amountIn,
         uint256 amountOutMin
     ) external payable returns (uint256 amountOut);
+
+    /**
+     * @notice Selects a path based on `tokenIn`, `tokenOut` and `amountIn` and computes a quote for `amountIn`
+     * @param tokenIn An address of a token to sell
+     * @param tokenOut An address of a token to buy
+     * @param amountIn An amount of `tokenIn` to get a quote for
+     * @return amountOut An amount of token received
+     * @dev Reverts when a path is not found. Not marked as view because Uni v3 quoter modifies states and then reverts.
+     */
+    function quote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) external returns (uint256 amountOut);
 }

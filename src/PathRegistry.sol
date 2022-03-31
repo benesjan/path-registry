@@ -258,6 +258,7 @@ contract PathRegistry is IPathRegistry {
         // Note: this value does not precisely represent gas consumed during swaps since swaps are not exactly equal
         // to quoting. However it should be a good enough approximation.
         uint256 weiConsumed = (gasLeftBefore - gasleft()) * tx.gasprice;
+        // TODO: replace the following by calling Mean Finance's static oracle once the oracle is deployed
         uint256 tokenConsumed = UniLibSnippets.getQuoteAtCurrentTick(weiConsumed, tokenOut);
         score = (score > tokenConsumed) ? score - tokenConsumed : 0;
 

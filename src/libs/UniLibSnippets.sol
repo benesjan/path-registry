@@ -1,3 +1,4 @@
+// TODO: delete once StaticOracle is finished https://github.com/Mean-Finance/v3-periphery/blob/ce2ea885415b19b079d1e6041df3b42f38d1615b/contracts/interfaces/IStaticOracle.sol#L73
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.0;
 

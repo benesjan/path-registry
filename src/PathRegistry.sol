@@ -28,6 +28,18 @@ contract PathRegistry is IPathRegistry {
     // @dev An array used to store all the paths
     Path[] public allPaths;
 
+    error NonExistentEthPool();
+    error UnviablePath();
+    error ApproveFailed();
+    error QuoteNotBetter();
+    error PathNotInitialized();
+    error NonWethInput();
+    error IncorrectAmountIn();
+    error TransferFailed();
+    error InsufficientAmountOut(uint256 received, uint256 required);
+    error IncorrectPercSum();
+    error EmptyPath();
+
     constructor() {
         // Waste the first array element in order to be able to check uninitialized Path by index == 0
         allPaths.push();
@@ -40,20 +52,18 @@ contract PathRegistry is IPathRegistry {
         Path memory curPath = allPaths[curPathIndex];
 
         if (curPathIndex == 0) {
-            require(UniLibSnippets.ethPoolExists(tokenOut), "NONEXISTENT_ETH_POOL");
-            require(evaluatePath(newPath, newPath.amount, tokenOut) > 0, "UNVIABLE_PATH");
+            if (!UniLibSnippets.ethPoolExists(tokenOut)) revert NonExistentEthPool();
+            if (evaluatePath(newPath, newPath.amount, tokenOut) == 0) revert UnviablePath();
 
             allPaths.push(newPath);
             firstPathIndices[tokenIn][tokenOut] = allPaths.length - 1;
 
-            require(IERC20(tokenIn).approve(address(ROUTER), type(uint256).max), "APPROVE_FAILED");
+            if (!IERC20(tokenIn).approve(address(ROUTER), type(uint256).max)) revert ApproveFailed();
         } else if (newPath.amount < curPath.amount) {
             // New path should be inserted before the first path
             // Check whether newPath is better than the current first path at newPath.amount
-            require(
-                evaluatePath(curPath, newPath.amount, tokenOut) < evaluatePath(newPath, newPath.amount, tokenOut),
-                "QUOTE_NOT_BETTER"
-            );
+            if (evaluatePath(curPath, newPath.amount, tokenOut) >= evaluatePath(newPath, newPath.amount, tokenOut))
+                revert QuoteNotBetter();
             if (evaluatePath(curPath, curPath.amount, tokenOut) < evaluatePath(newPath, curPath.amount, tokenOut)) {
                 // newPath is better even at curPath.amount - replace curPath with newPath
                 allPaths[curPathIndex] = newPath;
@@ -78,10 +88,8 @@ contract PathRegistry is IPathRegistry {
             }
 
             // Verify that newPath's quote is better at newPath.amount than prevPath's
-            require(
-                evaluatePath(curPath, newPath.amount, tokenOut) < evaluatePath(newPath, newPath.amount, tokenOut),
-                "QUOTE_NOT_BETTER"
-            );
+            if (evaluatePath(curPath, newPath.amount, tokenOut) >= evaluatePath(newPath, newPath.amount, tokenOut))
+                revert QuoteNotBetter();
 
             if (
                 curPath.next != 0 &&
@@ -110,15 +118,15 @@ contract PathRegistry is IPathRegistry {
         uint256 amountOutMin
     ) external payable returns (uint256 amountOut) {
         uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
-        require(curPathIndex != 0, "PATH_NOT_INITIALIZED");
+        if (curPathIndex == 0) revert PathNotInitialized();
 
         // 1. Convert ETH to WETH or transfer ERC20 to address(this)
         if (msg.value > 0) {
-            require(tokenIn == WETH, "NON_WETH_INPUT");
-            require(msg.value == amountIn, "INCORRECT_AMOUNT_IN");
+            if (tokenIn != WETH) revert NonWethInput();
+            if (msg.value != amountIn) revert IncorrectAmountIn();
             IWETH(WETH).deposit{value: msg.value}();
         } else {
-            require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER_FAILED");
+            if (!IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn)) revert TransferFailed();
         }
 
         // 2. Find the swap path - iterate through the tokenIn-tokenOut linked list and select the first path whose
@@ -152,7 +160,7 @@ contract PathRegistry is IPathRegistry {
             }
         }
 
-        require(amountOutMin <= amountOut, "INSUFFICIENT_AMOUNT_OUT");
+        if (amountOut < amountOutMin) revert InsufficientAmountOut({received: amountOut, required: amountOutMin});
     }
 
     // @inheritdoc IPathRegistry
@@ -162,7 +170,7 @@ contract PathRegistry is IPathRegistry {
         uint256 amountIn
     ) external returns (uint256 amountOut) {
         uint256 curPathIndex = firstPathIndices[tokenIn][tokenOut];
-        require(curPathIndex != 0, "PATH_NOT_INITIALIZED");
+        if (curPathIndex == 0) revert PathNotInitialized();
 
         // 1. Find the swap path - iterate through the tokenIn-tokenOut linked list and select the first path whose
         // next path doesn't exist or next path's amount is bigger than amountIn
@@ -262,7 +270,7 @@ contract PathRegistry is IPathRegistry {
         uint256 tokenConsumed = UniLibSnippets.getQuoteAtCurrentTick(weiConsumed, tokenOut);
         score = (score > tokenConsumed) ? score - tokenConsumed : 0;
 
-        require(percentSum == 100, "INCORRECT_PERC_SUM");
+        if (percentSum != 100) revert IncorrectPercSum();
     }
 
     /**
@@ -280,7 +288,7 @@ contract PathRegistry is IPathRegistry {
             tokenIn = v3Path.toAddress(0);
             tokenOut = v3Path.toAddress(v3Path.length - 20);
         } else {
-            require(false, "EMPTY_PATH");
+            revert EmptyPath();
         }
     }
 }

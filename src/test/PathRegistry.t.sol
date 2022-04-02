@@ -135,8 +135,10 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
     function testEthPoolHasToExist() public {
         try pathRegistry.registerPath(getPathNoEthPool(1e17)) {
             assertTrue(false, "registerPath(..) has to revert when ETH pool doesn't exist.");
-        } catch Error(string memory reason) {
-            assertEq(reason, "NONEXISTENT_ETH_POOL");
+        } catch (bytes memory reason) {
+            bytes4 expectedSelector = bytes4(keccak256(bytes("NonExistentEthPool()")));
+            bytes4 receivedSelector = bytes4(reason);
+            assertEq(expectedSelector, receivedSelector);
         }
     }
 
@@ -203,8 +205,10 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
 
         try pathRegistry.swap(WETH, LUSD, amountIn, type(uint256).max) {
             assertTrue(false, "swap(..) should revert when amountOut <  amountIn.");
-        } catch Error(string memory reason) {
-            assertEq(reason, "INSUFFICIENT_AMOUNT_OUT");
+        } catch (bytes memory reason) {
+            bytes4 expectedSelector = bytes4(keccak256(bytes("InsufficientAmountOut(uint256,uint256)")));
+            bytes4 receivedSelector = bytes4(reason);
+            assertEq(expectedSelector, receivedSelector);
         }
     }
 

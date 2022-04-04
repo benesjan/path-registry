@@ -136,9 +136,8 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
         try pathRegistry.registerPath(getPathNoEthPool(1e17)) {
             assertTrue(false, "registerPath(..) has to revert when ETH pool doesn't exist.");
         } catch (bytes memory reason) {
-            bytes4 expectedSelector = bytes4(keccak256(bytes("NonExistentEthPool()")));
-            bytes4 receivedSelector = bytes4(reason);
-            assertEq(expectedSelector, receivedSelector);
+            // Verify that the selector encoded in reason corresponds to NonExistentEthPool
+            assertEq(PathRegistry.NonExistentEthPool.selector, bytes4(reason));
         }
     }
 
@@ -206,9 +205,8 @@ contract PathRegistryTest is DSTest, stdCheats, TestPaths {
         try pathRegistry.swap(WETH, LUSD, amountIn, type(uint256).max) {
             assertTrue(false, "swap(..) should revert when amountOut <  amountIn.");
         } catch (bytes memory reason) {
-            bytes4 expectedSelector = bytes4(keccak256(bytes("InsufficientAmountOut(uint256,uint256)")));
-            bytes4 receivedSelector = bytes4(reason);
-            assertEq(expectedSelector, receivedSelector);
+            // Verify that the selector encoded in reason corresponds to InsufficientAmountOut
+            assertEq(PathRegistry.InsufficientAmountOut.selector, bytes4(reason));
         }
     }
 
